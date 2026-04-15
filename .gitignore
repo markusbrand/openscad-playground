@@ -35,6 +35,13 @@ coverage/
 .env.local
 .env.*.local
 
+# Docker
+backend-data/
+
+# Backend runtime data (encryption keys, encrypted API keys)
+backend/data/*
+!backend/data/.gitkeep
+
 # OS junk
 .DS_Store
 Thumbs.db

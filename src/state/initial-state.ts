@@ -40,6 +40,7 @@ export function createInitialState(state: State | null, source?: {content?: stri
         exportFormat3D: 'stl',
       },
       view: {
+        activeView: 'chat',
         layout: {
           mode: 'multi',
           editor: true,

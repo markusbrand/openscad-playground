@@ -5,7 +5,7 @@ import { ParameterSet } from './customizer-types.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 
 export type MultiLayoutComponentId = 'editor' | 'viewer' | 'customizer';
-export type SingleLayoutComponentId = MultiLayoutComponentId;
+export type SingleLayoutComponentId = MultiLayoutComponentId | 'chat';
 
 export type Source = {
   // If path ends w/ /, it's a directory, and URL should contain a ZIP file that can be mounted
@@ -44,6 +44,7 @@ export interface State {
   view: {
     logs?: boolean,
     extruderPickerVisibility?: 'editing' | 'exporting',
+    activeView?: 'chat' | 'code',
     layout: {
       mode: 'single',
       focus: SingleLayoutComponentId,
@@ -68,6 +69,7 @@ export interface State {
   previewing?: boolean,
   exporting?: boolean,
   checkingSyntax?: boolean,
+  generatingCode?: boolean,
 
   parameterSet?: ParameterSet,
   error?: string,

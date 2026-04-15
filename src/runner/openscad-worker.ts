@@ -1,14 +1,19 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 /// <reference lib="webworker" />
-import OpenSCAD from "../wasm/openscad.js";
 
 import { createEditorFS, symlinkLibraries } from "../fs/filesystem.ts";
 import { OpenSCADInvocation, OpenSCADInvocationCallback, OpenSCADInvocationResults } from "./openscad-runner.ts";
 import { deployedArchiveNames } from "../fs/zip-archives.ts";
 import { fetchSource } from "../utils.ts";
 
-importScripts("browserfs.min.js");
+async function loadBrowserFS() {
+  const response = await fetch(new URL("/browserfs.min.js", self.location.origin).href);
+  const script = await response.text();
+  (0, eval)(script);
+}
+
+const browserFSReady = loadBrowserFS();
 
 declare const self: DedicatedWorkerGlobalScope;
 
@@ -19,6 +24,8 @@ function callback(payload: OpenSCADInvocationCallback) {
 }
 
 self.addEventListener('message', async (e: MessageEvent<OpenSCADInvocation>) => {
+  await browserFSReady;
+
   const {
     mountArchives,
     inputs,
@@ -30,6 +37,7 @@ self.addEventListener('message', async (e: MessageEvent<OpenSCADInvocation>) => 
   let instance: any;
   const start = performance.now();
   try {
+    const { default: OpenSCAD } = await import(/* @vite-ignore */ '/openscad.js');
     instance = await OpenSCAD({
       noInitialRun: true,
       'print': (text: string) => {

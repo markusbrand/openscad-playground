@@ -1,151 +1,103 @@
-# OpenSCAD Playground
+# OpenSCAD Playground — AI-Powered 3D Printing Assistant
 
-[Open the Demo](https://ochafik.com/openscad2)
+An AI-powered web-based OpenSCAD editor with LLM integration for generating 3D-printable parametric models.
 
-<a href="https://ochafik.com/openscad2" target="_blank">
-<img width="694" alt="image" src="https://github.com/user-attachments/assets/58305f27-7e95-4c56-9cd7-0d766e0a21ae" />
-</a>
-
-This is a limited port of [OpenSCAD](https://openscad.org) to WebAssembly, using at its core a headless WASM build of OpenSCAD ([done by @DSchroer](https://github.com/DSchroer/openscad-wasm)), wrapped in a UI made of pretty [PrimeReact](https://github.com/primefaces/primereact) components, a [React Monaco editor](https://github.com/react-monaco-editor/react-monaco-editor) (VS Codesque power!), and an interactive [model-viewer](https://modelviewer.dev/) renderer.
-
-It defaults to the [Manifold backend](https://github.com/openscad/openscad/pull/4533) so it's **super** fast.
-
-Enjoy!
-
-Licenses: see [LICENSES](./LICENSE).
+**Upstream lineage:** This project builds on the [OpenSCAD web playground](https://ochafik.com/openscad2/) (OpenSCAD in the browser via WebAssembly, originally by [ochafik](https://github.com/ochafik) and contributors), using a headless WASM build from [DSchroer/openscad-wasm](https://github.com/DSchroer/openscad-wasm). This fork adds a FastAPI backend, LiteLLM-based chat, Material UI, and containerized deployment.
 
 ## Features
 
-- Automatic preview on edit (F5), and full rendering on Ctrl+Enter (or F6). Using a trick to force $preview=true.
-- [Customizer](https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Customizer) support
-- Syntax highlighting
-- Ships with many standard SCAD libraries (can browse through them in the UI)
-- Autocomplete of imports
-- Autocomplete of symbols / function calls (pseudo-parses file and its transitive imports)
-- Responsive layout. On small screens editor and viewer are stacked onto each other, while on larger screens they can be side-by-side
-- Installable as a PWA (then persists edits in localStorage instead of the hash fragment). On iOS just open the sharing panel and tap "Add to Home Screen". *Should not* require any internet connectivity once cached.
+- **LLM-powered OpenSCAD generation** — Gemini, OpenAI, Claude, Mistral, and local models via Ollama (through [LiteLLM](https://github.com/BerriAI/litellm))
+- **Real-time 3D preview** — [model-viewer](https://modelviewer.dev/) web component
+- **Auto-debug loop** — Automatic fixes for syntax and manifold-related issues (see [ADR 003](docs/adrs/003-auto-debug-loop.md))
+- **STL and SCAD export** — SCAD export with optional FreeCAD-oriented optimization
+- **Reference uploads** — STL, SCAD, and images for multimodal prompts where the model supports vision
+- **Dark / light Material Design UI** — React 18 + MUI
+- **Docker deployment** — Nginx + backend; Raspberry Pi and HTTPS via Cloudflare Tunnel (see [docs/deployment-raspberry-pi.md](docs/deployment-raspberry-pi.md))
 
-## Roadmap
+Core editor capabilities from upstream remain: OpenSCAD in the browser (Manifold-backed where applicable), customizer, libraries, Monaco editing, and PWA-friendly usage.
 
-- [x] Add tests!
-- [x] Persist camera state
-- [x] Support 2D somehow? (e.g. add option in OpenSCAD to output 2D geometry as non-closed polysets, or to auto-extrude by some height)
-- [x] Proper Preview rendering: have OpenSCAD export the preview scene to a rich format (e.g. glTF, with some parts being translucent when prefixed w/ % modifier) and display it using https://modelviewer.dev/ maybe)
-- ~~Rebuild w/ (and sync) ochafik@'s filtered kernel (https://github.com/openscad/openscad/pull/4160) to fix(ish) 2D operations~~
-- [x] Bundle more examples (ask users to contribute)
-- Animation rendering (And other formats than STL)
-- [x] Compress URL fragment
-- [x] Mobile (iOS) editing support: switch to https://www.npmjs.com/package/react-codemirror ?
-- [x] Replace Makefile w/ something that reads the libs metadata
-- [ ] Merge modifiers rendering code to openscad
-- Model /home fs in shared state. have two clear paths: /libraries for builtins, and /home for user data. State pointing to /libraries paths needs not store the data except if there's overrides (flagged as modifications in the file picker)
-- Drag and drop of files (SCAD, STL, etc) and Zip archives. For assets, auto insert the corresponding import.
-- Fuller PWA support w/ link Sharing, File opening / association to *.scad files... 
-- Look into accessibility
-- Setup [OPENSCADPATH](https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Libraries#Setting_OPENSCADPATH) env var w/ Emscripten to ensure examples that include assets / import local files will run fine.
-- Detect which bundled libraries are included / used in the sources and only download these rather than wait for all of the zips. Means the file explorer would need to be more lazy or have some prebuilt hierarchy.
-- Preparse builtin libraries definitions at compile time, ship the JSON.
+## Quick start (development)
 
-## Building
-
-The project uses a **webpack-based build system** that reads library metadata from `libs-config.json` to automatically download, clone, and package OpenSCAD libraries and dependencies. This replaces the previous Makefile approach with a more standard, maintainable solution.
-
-Prerequisites:
-*   wget or curl
-*   Node.js (>=18.12.0)
-*   npm
-*   git
-*   zip
-*   Docker able to run amd64 containers (only needed if building WASM from source). If running on a different platform (including Silicon Mac), you can add support for amd64 images through QEMU with:
-
-  ```bash
-  docker run --privileged --rm tonistiigi/binfmt --install all
-  ```
-
-Local dev:
+**Prerequisites:** Node.js 20+, Python 3.12+
 
 ```bash
-npm run build:libs  # Download WASM and build all OpenSCAD libraries
+git clone <repo-url>
+cd openscad-playground
+
+# Frontend
 npm install
-npm run start
-# http://localhost:4000/
+npm run build:libs    # OpenSCAD WASM and libraries (first time / after clean)
+npm run dev           # Vite — http://localhost:5173
+
+# Backend (separate terminal)
+cd backend
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env        # Add API keys and CORS origins
+uvicorn app.main:app --reload --port 8000
 ```
 
-Local prod (test both the different inlining and serving under a prefix):
+Point the frontend at the backend (see [Configuration](#configuration)). For Docker-style CORS, include `http://localhost:5173` in `CORS_ALLOWED_ORIGINS` in `backend/.env`.
+
+## Docker deployment
+
+From the repository root:
 
 ```bash
-npm run build:libs  # Download WASM and build all OpenSCAD libraries
-npm install
-npm run start:production
-# http://localhost:3000/dist/
+cp .env.example .env   # Configure ports, CORS, keys (see comments in file)
+docker compose build
+docker compose up -d
 ```
 
-Deployment (edit "homepage" in `package.json` to match your deployment root!):
+The stack builds the **backend** image (publishable to **GHCR** in CI) and a static **frontend** image; Nginx in the frontend container proxies `/api` to the backend. Default published port: **3080** (`FRONTEND_PORT`).
 
-```bash
-npm run build:all  # Build libraries and compile the application
-npm install
+Full steps for a Raspberry Pi with **Cloudflare Tunnel** and **GHCR** pulls: [docs/deployment-raspberry-pi.md](docs/deployment-raspberry-pi.md).
 
-rm -fR ../ochafik.github.io/openscad2 && cp -R dist ../ochafik.github.io/openscad2 
-# Now commit and push changes, wait for site update and enjoy!
-```
+## Architecture
 
-## Build your own WASM binary
+The **React** SPA talks to a **FastAPI** service under `/api/v1`. OpenSCAD compilation and preview run in the browser via **Web Workers** and WASM; the backend handles LLM calls, API key storage, and SCAD formatting/export helpers.
 
-The build system fetches a prebuilt OpenSCAD web WASM binary, but you can build your own in a couple of minutes:
+Design decisions are recorded as **ADRs**: [docs/adrs/](docs/adrs/). Documentation index: [docs/README.md](docs/README.md).
 
-- **Optional**: use your own openscad fork / branch:
+## Tech stack
 
-  ```bash
-  rm -fR libs/openscad
-  ln -s $PWD/../absolute/path/to/your/openscad libs/openscad
-  
-  # If you had a native build directory, delete it.
-  rm -fR libs/openscad/build
-  ```
+| Area | Technologies |
+|------|----------------|
+| Frontend | React 18, TypeScript, MUI, Monaco Editor, Vite |
+| Backend | FastAPI, LiteLLM, Python 3.12 |
+| 3D | OpenSCAD WASM, model-viewer |
+| Deploy | Docker, Nginx, Cloudflare Tunnel, GitHub Actions → GHCR |
 
-- Build WASM binary (add `WASM_BUILD=Debug` argument if you'd like to debug any cryptic crashes):
+## Configuration
 
-  ```bash
-  npm run build:libs:wasm
-  ```
+- **Root** [`.env.example`](.env.example) — `docker compose` (e.g. `FRONTEND_PORT`, paths shared with compose).
+- **Backend** [`backend/.env.example`](backend/.env.example) — local `uvicorn` and container runtime:
 
-- Then continue the build:
+| Variable | Purpose |
+|----------|---------|
+| `CORS_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call the API |
+| `MASTER_PROMPT_PATH` | Path to server system prompt (default: `prompts/master-prompt.md`) |
+| `OLLAMA_BASE_URL` | Ollama API base URL for local models |
+| `GEMINI_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY` | Optional; keys can also be set via the UI |
+| `MAX_AUTODEBUG_RETRIES` | Cap on auto-debug attempts |
+| `LOG_LEVEL` | Python logging level |
 
-  ```bash
-  npm run build:libs
-  npm run start
-  ```
+## LLM providers
 
-## Adding OpenSCAD libraries
+Models are proxied through LiteLLM; the UI loads the catalog from `GET /api/v1/models` (known cloud models plus dynamic **Ollama** discovery). Comparison, pricing notes, and recommendations: [docs/llm-models.md](docs/llm-models.md).
 
-The build system uses a webpack plugin that reads from `libs-config.json` to manage all library dependencies. You'll need to update 3 files (search for BOSL2 for an example):
+## Documentation
 
-- [libs-config.json](./libs-config.json): to add the library's metadata including repository URL, branch, and files to include/exclude in the zip archive
+- [docs/README.md](docs/README.md) — index (API table, ADRs, deployment, testing, security)
 
-- [src/fs/zip-archives.ts](./src/fs/zip-archives.ts): to use the `.zip` archive in the UI (both for file explorer and automatic imports mounting)
+## Contributing
 
-- [LICENSE.md](./LICENSE.md): most libraries require proper disclosure of their usage and of their license. If a license is unique, paste it in full, otherwise, link to one of the standard ones already there.
+1. Fork the repository and create a branch for your change.
+2. Run frontend and backend locally (see [Quick start](#quick-start-development)); add or update tests where applicable (`backend`: pytest; frontend: see `package.json` scripts).
+3. Keep commits focused; follow existing code style and logging patterns.
+4. Open a pull request with a clear description of behavior and any breaking API changes.
 
-### Library Configuration Format
+## License
 
-In `libs-config.json`, add an entry like this:
-
-```json
-{
-  "name": "LibraryName",
-  "repo": "https://github.com/user/repo.git", 
-  "branch": "main",
-  "zipIncludes": ["*.scad", "LICENSE", "examples"],
-  "zipExcludes": ["**/tests/**"],
-  "workingDir": "."
-}
-```
-
-Available build commands:
-- `npm run build:libs` - Build all libraries
-- `npm run build:libs:clean` - Clean all build artifacts
-- `npm run build:libs:wasm` - Download/build just the WASM binary
-- `npm run build:libs:fonts` - Download/build just the fonts
-
-Send us a PR, then once it's merged request an update to the hosted https://ochafik.com/openscad2 demo.
+The OpenSCAD Web Demo source is licensed under **GNU GPL v2 or later**; deployed artifacts may be subject to **GPLv3** when linking certain dependencies. Bundled components and library licenses are summarized in **[LICENSE.md](LICENSE.md)** (see also component-specific files such as `LICENSE.monaco`, `LICENSE.viewstl`).

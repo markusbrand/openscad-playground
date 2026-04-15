@@ -2,15 +2,23 @@
 
 import React, { CSSProperties, useContext } from 'react';
 import { ModelContext } from './contexts.ts';
-
-import { Dropdown } from 'primereact/dropdown';
-import { Slider } from 'primereact/slider';
-import { Checkbox } from 'primereact/checkbox';
-import { InputNumber } from 'primereact/inputnumber';
-import { InputText } from 'primereact/inputtext';
-import { Fieldset } from 'primereact/fieldset';
+import {
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Box,
+  Checkbox,
+  FormControlLabel,
+  IconButton,
+  MenuItem,
+  Select,
+  Slider,
+  TextField,
+  Typography,
+} from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { Parameter } from '../state/customizer-types.ts';
-import { Button } from 'primereact/button';
 
 export default function CustomizerPanel({className, style}: {className?: string, style?: CSSProperties}) {
 
@@ -49,31 +57,34 @@ export default function CustomizerPanel({className, style}: {className?: string,
           display: 'flex',
           flexDirection: 'column',
           maxHeight: '80vh',
-          overflow: 'scroll',
+          overflow: 'auto',
           ...style,
           bottom: 'unset',
         }}>
       {groups.map(([group, params]) => (
-        <Fieldset 
-            style={{
-              margin: '5px 10px 5px 10px',
-              // backgroundColor: 'transparent',
-              backgroundColor: 'rgba(255,255,255,0.4)',
-            }}
-            onCollapse={() => setTabOpen(group, false)}
-            onExpand={() => setTabOpen(group, true)}
-            collapsed={collapsedTabSet.has(group)}
-            key={group}
-            legend={group}
-            toggleable={true}>
-          {params.map((param) => (
-            <ParameterInput
-              key={param.name}
-              value={(state.params.vars ?? {})[param.name]}
-              param={param}
-              handleChange={handleChange} />
-          ))}
-        </Fieldset>
+        <Accordion
+          key={group}
+          expanded={!collapsedTabSet.has(group)}
+          onChange={(_e, expanded) => setTabOpen(group, expanded)}
+          sx={{
+            mx: '10px',
+            my: '5px',
+            backgroundColor: 'rgba(255,255,255,0.4)',
+          }}
+        >
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography>{group}</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {params.map((param: Parameter) => (
+              <ParameterInput
+                key={param.name}
+                value={(state.params.vars ?? {})[param.name]}
+                param={param}
+                handleChange={handleChange} />
+            ))}
+          </AccordionDetails>
+        </Accordion>
       ))}
     </div>
   );
@@ -81,128 +92,127 @@ export default function CustomizerPanel({className, style}: {className?: string,
 
 function ParameterInput({param, value, className, style, handleChange}: {param: Parameter, value: any, className?: string, style?: CSSProperties, handleChange: (key: string, value: any) => void}) {
   return (
-    <div 
-      style={{
+    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, ...style }}>
+      <Box sx={{
         flex: 1,
-        ...style,
         display: 'flex',
-        flexDirection: 'column',
+        m: '10px -10px 10px 5px',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
       }}>
-      <div 
-        style={{
-          flex: 1,
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <Typography variant="subtitle2" fontWeight="bold">{param.name}</Typography>
+          <Typography variant="caption">{param.caption}</Typography>
+        </Box>
+        <Box sx={{
           display: 'flex',
-          margin: '10px -10px 10px 5px',
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}>
-        <div 
-          style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-          }}>
-          <label><b>{param.name}</b></label>
-          <div>{param.caption}</div>
-        </div>
-        <div 
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}>
           {param.type === 'number' && 'options' in param && (
-            <Dropdown
-              style={{flex: 1}}
-              value={value || param.initial}
-              options={param.options}
-              onChange={(e) => handleChange(param.name, e.value)}
-              optionLabel="name"
-              optionValue="value"
-            />
+            <Select
+              size="small"
+              sx={{ flex: 1 }}
+              value={value ?? param.initial}
+              onChange={(e) => handleChange(param.name, e.target.value)}
+            >
+              {(param.options ?? []).map((opt: any) => (
+                <MenuItem key={opt.value} value={opt.value}>{opt.name}</MenuItem>
+              ))}
+            </Select>
           )}
           {param.type === 'string' && param.options && (
-            <Dropdown
-              value={value || param.initial}
-              options={param.options}
-              onChange={(e) => handleChange(param.name, e.value)}
-              optionLabel="name"
-              optionValue="value"
-            />
+            <Select
+              size="small"
+              value={value ?? param.initial}
+              onChange={(e) => handleChange(param.name, e.target.value)}
+            >
+              {param.options.map((opt: any) => (
+                <MenuItem key={opt.value} value={opt.value}>{opt.name}</MenuItem>
+              ))}
+            </Select>
           )}
           {param.type === 'boolean' && (
-            <Checkbox
-              checked={value ?? param.initial}
-              onChange={(e) => handleChange(param.name, e.checked)}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={value ?? param.initial}
+                  onChange={(e) => handleChange(param.name, e.target.checked)}
+                />
+              }
+              label=""
             />
           )}
           {!Array.isArray(param.initial) && param.type === 'number' && !('options' in param) && (
-            <InputNumber
-              value={value || param.initial}
-              showButtons
-              size={5}
-              onValueChange={(e) => handleChange(param.name, e.value)}
+            <TextField
+              type="number"
+              size="small"
+              value={value ?? param.initial}
+              onChange={(e) => handleChange(param.name, Number(e.target.value))}
+              sx={{ width: 120 }}
             />
           )}
           {param.type === 'string' && !param.options && (
-            <InputText
-              style={{flex: 1}}
-              value={value || param.initial}
+            <TextField
+              size="small"
+              sx={{ flex: 1 }}
+              value={value ?? param.initial}
               onChange={(e) => handleChange(param.name, e.target.value)}
             />
           )}
           {Array.isArray(param.initial) && 'min' in param && (
-            <div style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'row',
-            }}>
-              {param.initial.map((_, index) => (
-                <InputNumber
-                  style={{flex: 1}}
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'row', gap: 0.5 }}>
+              {param.initial.map((_: any, index: number) => (
+                <TextField
                   key={index}
+                  type="number"
+                  size="small"
+                  sx={{ flex: 1 }}
                   value={value?.[index] ?? (param.initial as any)[index]}
-                  min={param.min}
-                  max={param.max}
-                  showButtons
-                  size={5}
-                  step={param.step}
-                  onValueChange={(e) => {
+                  inputProps={{
+                    min: param.min,
+                    max: param.max,
+                    step: param.step,
+                  }}
+                  onChange={(e) => {
                     const newArray = [...(value ?? param.initial)];
-                    newArray[index] = e.value;
+                    newArray[index] = Number(e.target.value);
                     handleChange(param.name, newArray);
                   }}
                 />
               ))}
-            </div>
+            </Box>
           )}
-          <Button
+          <IconButton
             onClick={() => handleChange(param.name, param.initial)}
-            style={{
-              marginRight: '0',
+            sx={{
+              mr: 0,
               visibility: value === undefined || (JSON.stringify(value) === JSON.stringify(param.initial)) ? 'hidden' : 'visible',
             }}
-            tooltipOptions={{position: 'left'}}
-            icon='pi pi-refresh'
-            className='p-button-text'/>
-        </div>
-      </div>
+            title="Reset to default"
+          >
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </Box>
       {!Array.isArray(param.initial) && param.type === 'number' && param.min !== undefined && (
         <Slider
-          style={{
+          sx={{
             flex: 1,
             minHeight: '5px',
-            margin: '5px 40px 5px 5px',
+            mx: '5px',
+            mr: '40px',
+            my: '5px',
           }}
-          value={value || param.initial}
+          value={value ?? param.initial}
           min={param.min}
           max={param.max}
           step={param.step}
-          onChange={(e) => handleChange(param.name, e.value)}
+          onChange={(_e, val) => handleChange(param.name, val)}
         />
       )}
-    </div>
+    </Box>
   );
 }

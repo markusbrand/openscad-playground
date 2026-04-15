@@ -1,8 +1,8 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import { CSSProperties, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Box, CircularProgress, Snackbar, Alert, Typography } from '@mui/material';
 import { ModelContext } from './contexts.ts';
-import { Toast } from 'primereact/toast';
 import { blurHashToImage, imageToBlurhash, imageToThumbhash, thumbHashToImage } from '../io/image_hashes.ts';
 
 declare global {
@@ -58,7 +58,8 @@ export default function ViewerPanel({className, style}: {className?: string, sty
   const [interactionPrompt, setInteractionPrompt] = useState('auto');
   const modelViewerRef = useRef<any>();
   const axesViewerRef = useRef<any>();
-  const toastRef = useRef<Toast>(null);
+
+  const [snackbar, setSnackbar] = useState<{open: boolean, message: string}>({open: false, message: ''});
 
   const [loadedUri, setLoadedUri] = useState<string | undefined>();
 
@@ -90,7 +91,6 @@ export default function ViewerPanel({className, style}: {className?: string, sty
 
     const uri = await modelViewerRef.current.toDataURL('image/png', 0.5);
     const preview = {blurhash: await imageToBlurhash(uri)};
-    // const preview = {thumbhash: await imageToThumbhash(uri)};
     console.log(preview);
     
     model?.mutate(s => s.preview = preview);
@@ -125,7 +125,6 @@ export default function ViewerPanel({className, style}: {className?: string, sty
     }, [ref.current, otherRef.current]);
   }
 
-  // Cycle through predefined views when user clicks on the axes viewer
   useEffect(() => {
     let mouseDownSpherePoint: [number, number, number] | undefined;
     function getSpherePoint() {
@@ -147,7 +146,6 @@ export default function ViewerPanel({className, style}: {className?: string, sty
         if (clickDist > euclEps) {
           return;
         }
-        // Note: unlike the axes viewer, the model viewer has a prompt that makes the model wiggle around, we only fetch it to get the radius.
         const axesOrbit = axesViewerRef.current.getCameraOrbit();
         const modelOrbit = modelViewerRef.current.getCameraOrbit();
         const [currentIndex, dist, radDist] = getClosestPredefinedOrbitIndex(axesOrbit.theta, axesOrbit.phi);
@@ -155,15 +153,13 @@ export default function ViewerPanel({className, style}: {className?: string, sty
         const [name, theta, phi] = PREDEFINED_ORBITS[newIndex];
         Object.assign(modelOrbit, {theta, phi});
         const newOrbit = modelViewerRef.current.cameraOrbit = axesViewerRef.current.cameraOrbit = modelOrbit.toString();
-        toastRef.current?.show({severity: 'info', detail: `${name} view`, life: 1000,});
+        setSnackbar({open: true, message: `${name} view`});
         setInteractionPrompt('none');
       }
     }
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
-    // window.addEventListener('click', onClick);
     return () => {
-      // window.removeEventListener('click', onClick);
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
     };
@@ -179,7 +175,17 @@ export default function ViewerPanel({className, style}: {className?: string, sty
               width: '100%',
               ...(style ?? {})
           }}>
-      <Toast ref={toastRef} position='top-right'  />
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={1000}
+        onClose={() => setSnackbar({...snackbar, open: false})}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert severity="info" variant="filled" onClose={() => setSnackbar({...snackbar, open: false})}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+
       <style>
         {`
           @keyframes pulse {
@@ -238,7 +244,6 @@ export default function ViewerPanel({className, style}: {className?: string, sty
                 }}
                 loading="eager"
                 camera-orbit={originalOrbit}
-                // interpolation-decay="0"
                 environment-image="./skybox-lights.jpg"
                 max-camera-orbit="auto 180deg auto"
                 min-camera-orbit="auto 0deg auto"
@@ -252,6 +257,25 @@ export default function ViewerPanel({className, style}: {className?: string, sty
         >
           <span slot="progress-bar"></span>
         </model-viewer>
+      )}
+
+      {(state.generatingCode || state.rendering || state.previewing) && (
+        <Box sx={{
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          zIndex: 20,
+          transition: 'opacity 0.3s',
+        }}>
+          <CircularProgress size={60} />
+          <Typography variant="body1" sx={{ mt: 2, color: 'white' }}>
+            {state.generatingCode ? 'Generating code...' : state.rendering ? 'Rendering...' : 'Previewing...'}
+          </Typography>
+        </Box>
       )}
     </div>
   )

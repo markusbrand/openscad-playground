@@ -1,19 +1,25 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import React, { CSSProperties, useContext, useRef, useState } from 'react';
+import React, { CSSProperties, useContext, useState } from 'react';
 import Editor, { loader, Monaco } from '@monaco-editor/react';
 import openscadEditorOptions from '../language/openscad-editor-options.ts';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
-import { InputTextarea } from 'primereact/inputtextarea';
-import { Button } from 'primereact/button';
-import { MenuItem } from 'primereact/menuitem';
-import { Menu } from 'primereact/menu';
+import { Box, IconButton, Menu, MenuItem, ListItemIcon, ListItemText, Divider, TextField } from '@mui/material';
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import ShareIcon from '@mui/icons-material/Share';
+import NoteAddIcon from '@mui/icons-material/NoteAdd';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import UploadIcon from '@mui/icons-material/Upload';
+import DownloadIcon from '@mui/icons-material/Download';
+import SelectAllIcon from '@mui/icons-material/SelectAll';
+import SearchIcon from '@mui/icons-material/Search';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import { buildUrlForStateParams } from '../state/fragment-state.ts';
 import { getBlankProjectState, defaultSourcePath } from '../state/initial-state.ts';
-import { ModelContext, FSContext } from './contexts.ts';
-import FilePicker, {  } from './FilePicker.tsx';
+import { ModelContext } from './contexts.ts';
+import FilePicker from './FilePicker.tsx';
 
-// const isMonacoSupported = false;
 const isMonacoSupported = (() => {
   const ua = window.navigator.userAgent;
   const iosWk = ua.match(/iPad|iPhone/i) && ua.match(/WebKit/i);
@@ -31,11 +37,10 @@ export default function EditorPanel({className, style}: {className?: string, sty
   const model = useContext(ModelContext);
   if (!model) throw new Error('No model');
 
-  const menu = useRef<Menu>(null);
-
   const state = model.state;
 
   const [editor, setEditor] = useState(null as monaco.editor.IStandaloneCodeEditor | null)
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
 
   if (editor) {
     const checkerRun = state.lastCheckerRun;
@@ -73,91 +78,101 @@ export default function EditorPanel({className, style}: {className?: string, sty
     setEditor(editor)
   }
 
+  const menuItems = [
+    {
+      label: "New project",
+      icon: <AddCircleOutlineIcon fontSize="small" />,
+      onClick: () => window.open(buildUrlForStateParams(getBlankProjectState()), '_blank'),
+    },
+    {
+      label: 'Share project',
+      icon: <ShareIcon fontSize="small" />,
+      disabled: true,
+    },
+    { divider: true },
+    {
+      label: "New file",
+      icon: <NoteAddIcon fontSize="small" />,
+      disabled: true,
+    },
+    {
+      label: "Copy to new file",
+      icon: <ContentCopyIcon fontSize="small" />,
+      disabled: true,
+    },
+    {
+      label: "Upload file(s)",
+      icon: <UploadIcon fontSize="small" />,
+      disabled: true,
+    },
+    {
+      label: 'Download sources',
+      icon: <DownloadIcon fontSize="small" />,
+      disabled: true,
+    },
+    { divider: true },
+    {
+      label: 'Select All',
+      icon: <SelectAllIcon fontSize="small" />,
+      onClick: () => editor?.trigger(state.params.activePath, 'editor.action.selectAll', null),
+    },
+    { divider: true },
+    {
+      label: 'Find',
+      icon: <SearchIcon fontSize="small" />,
+      onClick: () => editor?.trigger(state.params.activePath, 'actions.find', null),
+    },
+  ];
+
   return (
     <div className={`editor-panel ${className ?? ''}`} style={{
-      // maxWidth: '5 0vw',
       display: 'flex',
       flexDirection: 'column',
-      // position: 'relative',
-      // width: '100%', height: '100%',
       ...(style ?? {})
     }}>
-      <div className='flex flex-row gap-2' style={{
-        margin: '5px',
-      }}>
+      <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, m: '5px', alignItems: 'center' }}>
           
-        <Menu model={[
-          {
-            label: "New project",
-            icon: 'pi pi-plus-circle',
-            command: () => window.open(buildUrlForStateParams(getBlankProjectState()), '_blank'),
-            target: '_blank',
-          },
-          {
-            // TODO: share text, title and rendering image
-            // https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share
-            label: 'Share project',
-            icon: 'pi pi-share-alt',
-            disabled: true,
-          },
-          {
-            separator: true
-          },  
-          {
-            // TODO: popup to ask for file name
-            label: "New file",
-            icon: 'pi pi-plus',
-            disabled: true,
-          },
-          {
-            label: "Copy to new file",
-            icon: 'pi pi-clone',
-            disabled: true,
-          },
-          {
-            label: "Upload file(s)",
-            icon: 'pi pi-upload',
-            disabled: true,
-          },
-          {
-            label: 'Download sources',
-            icon: 'pi pi-download',
-            disabled: true,
-          },
-          {
-            separator: true
-          },
-          {
-            separator: true
-          },
-          {
-            label: 'Select All',
-            icon: 'pi pi-info-circle',
-            command: () => editor?.trigger(state.params.activePath, 'editor.action.selectAll', null),
-          },
-          {
-            separator: true
-          },
-          {
-            label: 'Find',
-            icon: 'pi pi-search',
-            command: () => editor?.trigger(state.params.activePath, 'actions.find', null),
-          },
-        ] as MenuItem[]} popup ref={menu} />
-        <Button title="Editor menu" rounded text icon="pi pi-ellipsis-h" onClick={(e) => menu.current && menu.current.toggle(e)} />
+        <IconButton
+          title="Editor menu"
+          onClick={(e) => setMenuAnchor(e.currentTarget)}
+        >
+          <MoreHorizIcon />
+        </IconButton>
+        <Menu
+          anchorEl={menuAnchor}
+          open={Boolean(menuAnchor)}
+          onClose={() => setMenuAnchor(null)}
+        >
+          {menuItems.map((item, i) => 
+            'divider' in item ? (
+              <Divider key={i} />
+            ) : (
+              <MenuItem
+                key={i}
+                disabled={item.disabled}
+                onClick={() => {
+                  setMenuAnchor(null);
+                  item.onClick?.();
+                }}
+              >
+                {item.icon && <ListItemIcon>{item.icon}</ListItemIcon>}
+                <ListItemText>{item.label}</ListItemText>
+              </MenuItem>
+            )
+          )}
+        </Menu>
         
-        <FilePicker 
-            style={{
-              flex: 1,
-            }}/>
+        <FilePicker style={{ flex: 1 }} />
 
         {state.params.activePath !== defaultSourcePath && 
-          <Button icon="pi pi-chevron-left" 
-          text
-          onClick={() => model.openFile(defaultSourcePath)} 
-          title={`Go back to ${defaultSourcePath}`}/>}
-
-      </div>
+          <IconButton
+            onClick={() => model.openFile(defaultSourcePath)} 
+            title={`Go back to ${defaultSourcePath}`}
+          >
+            <ChevronLeftIcon />
+          </IconButton>
+        }
+      </Box>
 
       
       <div style={{
@@ -171,7 +186,7 @@ export default function EditorPanel({className, style}: {className?: string, sty
             path={state.params.activePath}
             value={model.source}
             onChange={s => model.source = s ?? ''}
-            onMount={onMount} // TODO: This looks a bit silly, does it trigger a re-render??
+            onMount={onMount}
             options={{
               ...openscadEditorOptions,
               fontSize: 16,
@@ -180,10 +195,14 @@ export default function EditorPanel({className, style}: {className?: string, sty
           />
         )}
         {!isMonacoSupported && (
-          <InputTextarea 
+          <TextField
             className="openscad-editor absolute-fill"
             value={model.source}
-            onChange={s => model.source = s.target.value ?? ''}  
+            onChange={s => model.source = s.target.value ?? ''}
+            multiline
+            fullWidth
+            variant="outlined"
+            sx={{ height: '100%' }}
           />
         )}
       </div>

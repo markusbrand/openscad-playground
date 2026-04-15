@@ -1,0 +1,166 @@
+import React, { useState } from 'react';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControlLabel,
+  Typography,
+} from '@mui/material';
+import { exportScad } from '../services/api.ts';
+
+function triggerBlobDownload(content: string, filename: string, mime: string) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export interface ScadDownloadDialogProps {
+  open: boolean;
+  onClose: () => void;
+  source: string;
+  defaultFilename: string;
+}
+
+/** Download current source; optionally optimize via backend for FreeCAD. */
+export function ScadDownloadDialog({ open, onClose, source, defaultFilename }: ScadDownloadDialogProps) {
+  const [optimizeForFreecad, setOptimizeForFreecad] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleClose = () => {
+    if (!loading) {
+      setError(null);
+      setOptimizeForFreecad(false);
+      onClose();
+    }
+  };
+
+  const handleDownload = async () => {
+    setError(null);
+    if (!optimizeForFreecad) {
+      triggerBlobDownload(source, defaultFilename, 'text/plain');
+      handleClose();
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await exportScad({ code: source, optimize_for_freecad: true });
+      triggerBlobDownload(res.code, res.filename, 'text/plain');
+      handleClose();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error('SCAD export (optimize for FreeCAD) failed:', e);
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Download SCAD</DialogTitle>
+      <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Saves the current editor source. Enable optimization to run it through the backend for FreeCAD-friendly
+          formatting (requires the API backend).
+        </Typography>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={optimizeForFreecad}
+              onChange={(_, c) => setOptimizeForFreecad(c)}
+              disabled={loading}
+            />
+          }
+          label="Optimize for FreeCAD"
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleClose} disabled={loading}>
+          Cancel
+        </Button>
+        <Button onClick={handleDownload} variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={18} /> : null}>
+          Download
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+export interface FreeCadExportDialogProps {
+  open: boolean;
+  onClose: () => void;
+  source: string;
+}
+
+/** Export SCAD optimized for FreeCAD via POST /api/v1/export/scad. */
+export function FreeCadExportDialog({ open, onClose, source }: FreeCadExportDialogProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleClose = () => {
+    if (!loading) {
+      setError(null);
+      onClose();
+    }
+  };
+
+  const handleExport = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await exportScad({ code: source, optimize_for_freecad: true });
+      triggerBlobDownload(res.code, res.filename, 'text/plain');
+      handleClose();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error('FreeCAD SCAD export failed:', e);
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Export for FreeCAD</DialogTitle>
+      <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        <Alert severity="info" sx={{ mb: 2 }}>
+          FreeCAD&apos;s OpenSCAD workbench imports plain <code>.scad</code> files. This export adds a compatibility
+          header and normalizes text for smoother import. For mesh-based workflows, use STL or STEP from a mesher
+          after validating the model in OpenSCAD.
+        </Alert>
+        <Typography variant="body2" color="text.secondary">
+          Requires a running backend (proxied at <code>/api/v1</code> in development).
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={handleClose} disabled={loading}>
+          Cancel
+        </Button>
+        <Button onClick={handleExport} variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={18} /> : null}>
+          Download optimized SCAD
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}

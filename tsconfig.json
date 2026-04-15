@@ -23,8 +23,10 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "declaration": true,
+    "types": ["vite/client"],
     "baseUrl": "src",
     "paths": {
+      "@/*": ["./*"],
       "*": ["*"]
     }
   },

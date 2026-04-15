@@ -70,6 +70,11 @@ export class Model {
   }
 
   isComponentFullyVisible(id: SingleLayoutComponentId) {
+    if (id === 'chat') {
+      return this.state.view.layout.mode === 'single'
+        ? this.state.view.layout.focus === 'chat'
+        : (this.state.view.activeView ?? 'chat') === 'chat';
+    }
     if (this.state.view.layout.mode === 'multi') {
       return this.state.view.layout[id];
     } else {
@@ -80,24 +85,34 @@ export class Model {
   changeLayout(mode: 'multi' | 'single') {
     if (this.state.view.layout.mode === mode) return;
     this.mutate(s => {
-      s.view.layout = s.view.layout.mode === 'multi'
-        ? {
-          mode: 'single',
-          focus: s.view.layout.editor ? 'editor' : s.view.layout.viewer ? 'viewer' : 'customizer'
-        }
-        : {
+      if (s.view.layout.mode === 'multi') {
+        const focus = s.view.activeView === 'chat' ? 'chat' as const
+          : s.view.layout.editor ? 'editor' as const
+          : s.view.layout.viewer ? 'viewer' as const
+          : 'customizer' as const;
+        s.view.layout = { mode: 'single', focus };
+      } else {
+        const currentFocus = s.view.layout.focus;
+        s.view.activeView = currentFocus === 'chat' ? 'chat' : 'code';
+        s.view.layout = {
           mode: 'multi',
-          editor: s.view.layout.focus === 'editor',
-          viewer: s.view.layout.focus === 'viewer',
-          customizer: s.view.layout.focus === 'customizer',
-        }
+          editor: currentFocus === 'editor',
+          viewer: true,
+          customizer: currentFocus === 'customizer',
+        };
+      }
     });
   }
   changeSingleVisibility(focus: SingleLayoutComponentId) {
     this.mutate(s => {
       if (s.view.layout.mode !== 'single') throw new Error('Wrong mode');
       s.view.layout.focus = focus;
-      if (focus !== 'editor') {
+      if (focus === 'chat') {
+        s.view.activeView = 'chat';
+      } else if (focus === 'editor') {
+        s.view.activeView = 'code';
+      }
+      if (focus !== 'editor' && focus !== 'chat') {
         s.view.logs = false;
       }
     });
@@ -327,6 +342,76 @@ export class Model {
         downloadUrl(URL.createObjectURL(file), file.name);
       });
     }
+  }
+
+  async autoDebugAndRender(
+    code: string,
+    selectedModel: string,
+    onStatusUpdate?: (status: string) => void,
+  ): Promise<{success: boolean; finalCode: string; error?: string}> {
+    this.source = code;
+
+    const maxRetries = 3;
+    let currentCode = code;
+    let attempt = 0;
+
+    while (attempt < maxRetries) {
+      this.mutate(s => s.generatingCode = true);
+      onStatusUpdate?.(`Compiling OpenSCAD code (attempt ${attempt + 1}/${maxRetries})...`);
+
+      try {
+        await this.render({isPreview: true, now: true});
+      } catch {
+        // render errors are handled internally via state
+      }
+
+      const markerErrors = this.state.lastCheckerRun?.markers
+        ?.filter(m => m.severity >= 8)
+        ?.map(m => `Line ${m.startLineNumber}: ${m.message}`)
+        ?.join('\n') ?? '';
+
+      const logErrors = (this.state.currentRunLogs ?? [])
+        .filter(([type]) => type === 'stderr')
+        .map(([, text]) => text)
+        .join('\n');
+
+      const allErrors = [markerErrors, logErrors].filter(Boolean).join('\n');
+
+      if (!allErrors && this.state.output) {
+        this.mutate(s => s.generatingCode = false);
+        onStatusUpdate?.('Model rendered successfully!');
+        return {success: true, finalCode: currentCode};
+      }
+
+      if (attempt >= maxRetries - 1) {
+        this.mutate(s => s.generatingCode = false);
+        return {success: false, finalCode: currentCode, error: allErrors};
+      }
+
+      attempt++;
+      onStatusUpdate?.(`Auto-fixing errors (attempt ${attempt}/${maxRetries})...`);
+
+      try {
+        const {autodebug} = await import('../services/api');
+        const result = await autodebug({
+          code: currentCode,
+          errors: allErrors,
+          model: selectedModel,
+          attempt,
+        });
+
+        currentCode = result.fixed_code;
+        this.source = currentCode;
+
+        onStatusUpdate?.(`Applied fix (confidence: ${result.confidence}). Re-compiling...`);
+      } catch (err) {
+        this.mutate(s => s.generatingCode = false);
+        return {success: false, finalCode: currentCode, error: `Auto-debug failed: ${err}`};
+      }
+    }
+
+    this.mutate(s => s.generatingCode = false);
+    return {success: false, finalCode: currentCode, error: 'Max retries exceeded'};
   }
 
   async render({isPreview, mountArchives, now, retryInOtherDim}: {isPreview: boolean, mountArchives?: boolean, now: boolean, retryInOtherDim?: boolean}) {

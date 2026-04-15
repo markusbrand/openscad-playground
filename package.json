@@ -16,10 +16,11 @@
     "chroma-js": "^3.1.2",
     "debug": "^4.4.0",
     "jszip": "^3.10.1",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^6.4.0",
+    "@mui/material": "^6.4.0",
     "monaco-editor": "^0.52.2",
-    "primeflex": "^3.3.1",
-    "primeicons": "^7.0.0",
-    "primereact": "^10.8.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "thumbhash": "^0.1.1",
@@ -27,17 +28,15 @@
     "uzip": "^0.20201231.0"
   },
   "scripts": {
-    "test:e2e": "jest",
-    "start:development": "npx webpack serve --mode=development",
-    "start:production": "cross-env NODE_ENV=production PUBLIC_URL=http://localhost:3000/dist/ npm run build && npx serve",
-    "start:test": "npm run start:development",
-    "start": "npm run start:development",
-    "build": "cross-env NODE_ENV=production webpack --mode=production",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "build:libs": "cross-env LIBS_BUILD_MODE=all webpack --config webpack.libs.config.js",
     "build:libs:clean": "cross-env LIBS_BUILD_MODE=clean webpack --config webpack.libs.config.js",
     "build:libs:wasm": "cross-env LIBS_BUILD_MODE=wasm webpack --config webpack.libs.config.js",
     "build:libs:fonts": "cross-env LIBS_BUILD_MODE=fonts webpack --config webpack.libs.config.js",
-    "build:all": "npm run build:libs && npm run build"
+    "build:all": "npm run build:libs && npm run build",
+    "test:e2e": "jest"
   },
   "eslintConfig": {
     "extends": [
@@ -61,6 +60,7 @@
     "node": ">=18.12.0"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.0",
     "@types/chroma-js": "^2.4.5",
     "@types/debug": "^4.1.12",
     "@types/filesystem": "^0.0.36",
@@ -85,6 +85,8 @@
     "webpack": "^5.97.1",
     "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.0",
+    "vite": "^6.0.0",
+    "vite-plugin-static-copy": "^2.2.0",
     "workbox-webpack-plugin": "^7.3.0"
   }
 }

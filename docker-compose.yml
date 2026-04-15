@@ -1,0 +1,45 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: openscad-backend
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - backend-data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - openscad-net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: openscad-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - openscad-net
+
+volumes:
+  backend-data:
+
+networks:
+  openscad-net:
+    driver: bridge
