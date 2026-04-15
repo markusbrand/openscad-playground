@@ -1,3 +1,6 @@
+import os from 'node:os';
+import path from 'node:path';
+
 import OpenSCADLibrariesPlugin from './webpack-libs-plugin.js';
 
 const buildMode = process.env.LIBS_BUILD_MODE || 'all';
@@ -7,7 +10,7 @@ const config = {
     mode: 'none', // We're not actually building JS, just using webpack as a task runner
     entry: './package.json', // Dummy entry point that exists
     output: {
-        path: '/tmp', // Output to temp directory
+        path: path.join(os.tmpdir(), 'openscad-playground-webpack-libs'),
         filename: 'webpack-libs-temp.js', // This won't be used
     },
     plugins: [

@@ -1,14 +1,172 @@
 #!/usr/bin/env node
 
-import { exec } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { createWriteStream, existsSync } from 'node:fs';
-import fs from 'node:fs/promises';
+import fs, { glob as fsGlob } from 'node:fs/promises';
 import https from 'node:https';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+/** Git Bash path for Unix utilities (unzip, zip, find) on Windows. */
+function findGitBash() {
+    const bases = [
+        process.env.PROGRAMFILES,
+        process.env['PROGRAMFILES(X86)'],
+        process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Programs') : null,
+    ].filter(Boolean);
+
+    for (const base of bases) {
+        const candidate = path.join(base, 'Git', 'bin', 'bash.exe');
+        if (existsSync(candidate)) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+/** Resolve to a path Git Bash understands (e.g. /c/Users/.../proj). */
+function toUnixPathForBash(p) {
+    const resolved = path.resolve(p);
+    if (process.platform !== 'win32') {
+        return resolved;
+    }
+    const normalized = resolved.replace(/\//g, '\\');
+    const m = normalized.match(/^([A-Za-z]):\\(.*)$/);
+    if (m) {
+        return `/${m[1].toLowerCase()}/${m[2].split('\\').join('/')}`;
+    }
+    return normalized.split('\\').join('/');
+}
+
+/**
+ * Run a Unix shell snippet (find, zip, unzip, rm). On Windows uses Git Bash so
+ * the same commands work as on Linux/macOS.
+ */
+async function execUnixShell(command, options = {}) {
+    const cwd = options.cwd ?? process.cwd();
+    if (process.platform !== 'win32') {
+        return execAsync(command, { ...options, cwd });
+    }
+    const bash = findGitBash();
+    if (!bash) {
+        throw new Error(
+            'On Windows, npm run build:libs needs Git for Windows so `unzip` is available for the WASM bundle (Git usr/bin). ' +
+                'Install from https://git-scm.com/download/win or add bash.exe under LOCALAPPDATA\\Programs\\Git.'
+        );
+    }
+    const gitRoot = path.resolve(path.dirname(bash), '..');
+    const mingwBin = toUnixPathForBash(path.join(gitRoot, 'mingw64', 'bin'));
+    const usrBin = toUnixPathForBash(path.join(gitRoot, 'usr', 'bin'));
+    const pathPrefix = `export PATH="${mingwBin}:${usrBin}:$PATH" && `;
+    return execFileAsync(bash, ['-lc', pathPrefix + command], { ...options, cwd });
+}
+
+function posixPath(p) {
+    return p.split(path.sep).join('/');
+}
+
+/** Mirrors libs find excludes (paths under a "tests" directory). */
+function isExcluded(relPosix, excludes) {
+    if (!excludes?.length) {
+        return false;
+    }
+    const n = relPosix.replace(/\\/g, '/');
+    for (const ex of excludes) {
+        if (ex.includes('tests')) {
+            if (n.includes('/tests/') || n.startsWith('tests/')) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+function classifyInclude(pattern) {
+    if (pattern.startsWith('../')) {
+        return { kind: 'parent', pattern };
+    }
+    if (pattern.includes('**')) {
+        return { kind: 'glob', globs: [pattern] };
+    }
+    if (pattern.includes('*')) {
+        if (pattern === '*.scad') {
+            return { kind: 'glob', globs: ['**/*.scad'] };
+        }
+        return { kind: 'glob', globs: [pattern] };
+    }
+    return { kind: 'literal', pattern };
+}
+
+async function collectMatchesForInclude(fullSourceDir, pattern, excludes, map) {
+    const spec = classifyInclude(pattern);
+    if (spec.kind === 'parent') {
+        const abs = path.normalize(path.join(fullSourceDir, spec.pattern));
+        if (!existsSync(abs)) {
+            return;
+        }
+        const st = await fs.stat(abs);
+        if (!st.isFile()) {
+            return;
+        }
+        const relKey = posixPath(path.relative(fullSourceDir, abs));
+        if (!isExcluded(relKey, excludes)) {
+            map.set(relKey, abs);
+        }
+        return;
+    }
+    if (spec.kind === 'glob') {
+        for (const g of spec.globs) {
+            for await (const rel of fsGlob(g, { cwd: fullSourceDir, nodir: true })) {
+                const relKey = posixPath(rel);
+                if (!isExcluded(relKey, excludes)) {
+                    map.set(relKey, path.join(fullSourceDir, rel));
+                }
+            }
+        }
+        return;
+    }
+    const lit = spec.pattern;
+    const abs = path.join(fullSourceDir, lit);
+    const st = await fs.stat(abs).catch(() => null);
+    if (!st) {
+        return;
+    }
+    if (st.isFile()) {
+        const relKey = posixPath(lit);
+        if (!isExcluded(relKey, excludes)) {
+            map.set(relKey, abs);
+        }
+        return;
+    }
+    if (st.isDirectory()) {
+        const treeGlob = `${lit.replace(/\\/g, '/')}/**/*`;
+        for await (const rel of fsGlob(treeGlob, { cwd: fullSourceDir, nodir: true })) {
+            const relKey = posixPath(rel);
+            if (!isExcluded(relKey, excludes)) {
+                map.set(relKey, path.join(fullSourceDir, rel));
+            }
+        }
+    }
+}
+
+async function writeZipFromFileMap(outputPath, map) {
+    const { default: JSZip } = await import('jszip');
+    const zip = new JSZip();
+    for (const [rel, abs] of map) {
+        zip.file(rel, await fs.readFile(abs));
+    }
+    const buf = await zip.generateAsync({
+        type: 'nodebuffer',
+        compression: 'DEFLATE',
+        compressionOptions: { level: 6 },
+    });
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, buf);
+}
 
 class OpenSCADLibrariesPlugin {
     constructor(options = {}) {
@@ -119,46 +277,16 @@ class OpenSCADLibrariesPlugin {
         await this.ensureDir(path.dirname(outputPath));
 
         const fullSourceDir = path.join(sourceDir, workingDir);
+        const includeList = includes.length > 0 ? includes : ['*.scad'];
+        const map = new Map();
 
-        // Build find command for includes
-        let findCmd = '';
-        if (includes.length > 0) {
-            const findPatterns = includes.map(pattern => {
-                if (pattern.includes('**/*.')) {
-                    const parts = pattern.split('/');
-                    const dir = parts[0];
-                    const filePattern = parts[parts.length - 1];
-                    return `-path "./${dir}/*" -name "${filePattern}"`;
-                } else if (pattern.includes('**')) {
-                    const filePattern = pattern.replace('**/', '');
-                    return `-name "${filePattern}"`;
-                } else if (pattern.includes('*')) {
-                    return `-name "${pattern}"`;
-                } else if (pattern.includes('/')) {
-                    return `-path "./${pattern}"`;
-                } else {
-                    return `-name "${pattern}" -o -path "./${pattern}/*"`;
-                }
-            }).join(' -o ');
-            findCmd = `find . \\( ${findPatterns} \\)`;
-        } else {
-            findCmd = 'find . -name "*.scad"';
+        for (const pattern of includeList) {
+            await collectMatchesForInclude(fullSourceDir, pattern, excludes, map);
         }
-
-        // Add excludes
-        if (excludes.length > 0) {
-            const excludePatterns = excludes.map(pattern => {
-                const cleanPattern = pattern.replace('**/', '').replace('/**', '');
-                return `-not -path "*/${cleanPattern}*"`;
-            }).join(' ');
-            findCmd += ` ${excludePatterns}`;
-        }
-
-        const zipCmd = `cd ${fullSourceDir} && ${findCmd} | zip -r ${path.resolve(outputPath)} -@`;
 
         console.log(`Creating zip: ${outputPath}`);
         try {
-            await execAsync(zipCmd);
+            await writeZipFromFileMap(path.resolve(outputPath), map);
         } catch (error) {
             console.error(`Failed to create zip ${outputPath}:`, error.message);
             throw error;
@@ -177,7 +305,7 @@ class OpenSCADLibrariesPlugin {
             await this.downloadFile(wasmBuild.url, wasmZip);
 
             console.log(`Extracting WASM to ${wasmDir}`);
-            await execAsync(`cd ${wasmDir} && unzip ../${path.basename(wasmZip)}`);
+            await execUnixShell(`cd "${toUnixPathForBash(wasmDir)}" && unzip "${toUnixPathForBash(wasmZip)}"`);
         }
 
         await this.ensureDir('public');
@@ -193,15 +321,26 @@ class OpenSCADLibrariesPlugin {
             await fs.unlink(wasmTarget);
         } catch { /* ignore */ }
 
-        // Create new symlinks
-        await fs.symlink(path.relative('public', path.join(wasmDir, 'openscad.js')), jsTarget);
-        await fs.symlink(path.relative('public', path.join(wasmDir, 'openscad.wasm')), wasmTarget);
+        const wasmJs = path.join(wasmDir, 'openscad.js');
+        const wasmBin = path.join(wasmDir, 'openscad.wasm');
 
-        // Create src/wasm symlink
+        if (process.platform === 'win32') {
+            await fs.copyFile(wasmJs, jsTarget);
+            await fs.copyFile(wasmBin, wasmTarget);
+        } else {
+            await fs.symlink(path.relative('public', wasmJs), jsTarget);
+            await fs.symlink(path.relative('public', wasmBin), wasmTarget);
+        }
+
+        // Create src/wasm link (junction on Windows avoids symlink privilege issues)
         try {
             await fs.unlink(this.srcWasmDir);
         } catch { /* ignore */ }
-        await fs.symlink(path.relative('src', wasmDir), this.srcWasmDir);
+        if (process.platform === 'win32') {
+            await fs.symlink(path.resolve(wasmDir), this.srcWasmDir, 'junction');
+        } else {
+            await fs.symlink(path.relative('src', wasmDir), this.srcWasmDir);
+        }
 
         console.log('WASM setup completed');
     }
@@ -227,13 +366,34 @@ class OpenSCADLibrariesPlugin {
             await this.cloneRepo(fonts.liberationRepo, liberationDir, fonts.liberationBranch);
         }
 
-        // Create fonts zip
+        // Create fonts.zip (flat layout like zip -j; pure Node so no zip binary is required)
         const fontsZip = path.join(this.publicLibsDir, 'fonts.zip');
         await this.ensureDir(this.publicLibsDir);
 
         console.log('Creating fonts.zip');
-        const fontsCmd = `zip -r ${fontsZip} -j fonts.conf libs/noto/*.ttf libs/liberation/*.ttf libs/liberation/LICENSE libs/liberation/AUTHORS`;
-        await execAsync(fontsCmd);
+        const { default: JSZip } = await import('jszip');
+        const zip = new JSZip();
+        const fontConfPath = path.resolve('fonts.conf');
+        zip.file('fonts.conf', await fs.readFile(fontConfPath));
+        for (const name of await fs.readdir(notoDir)) {
+            if (name.toLowerCase().endsWith('.ttf')) {
+                zip.file(name, await fs.readFile(path.join(notoDir, name)));
+            }
+        }
+        for (const name of await fs.readdir(liberationDir)) {
+            if (name.toLowerCase().endsWith('.ttf')) {
+                zip.file(name, await fs.readFile(path.join(liberationDir, name)));
+            }
+        }
+        for (const name of ['LICENSE', 'AUTHORS']) {
+            zip.file(name, await fs.readFile(path.join(liberationDir, name)));
+        }
+        const fontBuf = await zip.generateAsync({
+            type: 'nodebuffer',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 6 },
+        });
+        await fs.writeFile(fontsZip, fontBuf);
 
         console.log('Fonts setup completed');
     }
@@ -282,7 +442,10 @@ class OpenSCADLibrariesPlugin {
         for (const cleanPath of cleanPaths) {
             try {
                 if (cleanPath.includes('*')) {
-                    await execAsync(`rm -f ${cleanPath}`);
+                    const libDirOnly = path.dirname(cleanPath);
+                    for await (const name of fsGlob('*.zip', { cwd: libDirOnly })) {
+                        await fs.unlink(path.join(libDirOnly, name));
+                    }
                 } else {
                     await fs.rm(cleanPath, { recursive: true, force: true });
                 }
