@@ -18,6 +18,11 @@ export function createInitialState(state: State | null, source?: {content?: stri
   if (state) {
     if (source) throw new Error('Cannot provide source when state is provided');
     initialState = state;
+    // Older builds briefly set activeView to 'editor' instead of 'code'; normalize for URL-persisted state.
+    const raw = initialState.view.activeView as string | undefined;
+    if (raw === 'editor') {
+      initialState.view.activeView = 'code';
+    }
   } else {
     let content, path, url, blurhash;
     if (source) {

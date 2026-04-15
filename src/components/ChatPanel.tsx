@@ -1,10 +1,16 @@
-import React, { CSSProperties, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, { CSSProperties, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Alert,
   Avatar,
   Box,
+  Button,
   Chip,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
   MenuItem,
   Paper,
@@ -21,9 +27,9 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import PersonIcon from '@mui/icons-material/Person';
 import StopIcon from '@mui/icons-material/Stop';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseIcon from '@mui/icons-material/Close';
 import BugReportIcon from '@mui/icons-material/BugReport';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import debug from 'debug';
 import { v4 as uuidv4 } from 'uuid';
 import { ModelContext } from './contexts';
@@ -63,85 +69,108 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function CodeBlock({ code, onApply }: { code: string; onApply: () => void }) {
-  const theme = useTheme();
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
-
-  return (
-    <Box sx={{ position: 'relative', my: 1 }}>
-      <Box sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        px: 1.5,
-        py: 0.5,
-        bgcolor: theme.palette.mode === 'dark' ? 'grey.800' : 'grey.200',
-        borderTopLeftRadius: 8,
-        borderTopRightRadius: 8,
-      }}>
-        <Typography variant="caption" color="text.secondary">OpenSCAD</Typography>
-        <Box>
-          <Tooltip title={copied ? 'Copied!' : 'Copy code'}>
-            <IconButton size="small" onClick={handleCopy}>
-              <ContentCopyIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Apply to editor">
-            <IconButton size="small" onClick={onApply} color="primary">
-              <SmartToyIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Box>
-      <Box
-        component="pre"
-        sx={{
-          m: 0,
-          p: 1.5,
-          bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
-          borderBottomLeftRadius: 8,
-          borderBottomRightRadius: 8,
-          overflow: 'auto',
-          maxHeight: 300,
-          fontSize: '0.8rem',
-          fontFamily: 'source-code-pro, Menlo, Monaco, Consolas, monospace',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
-        }}
-      >
-        {code}
-      </Box>
-    </Box>
-  );
+/** Remove all ``` … ``` blocks so chat never shows fenced code. */
+function stripMarkdownCodeBlocks(text: string): string {
+  return text
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
-function MessageContent({ text, onApplyCode }: { text: string; onApplyCode: (code: string) => void }) {
-  const parts = text.split(/(```[\s\S]*?```)/g);
+const SCAD_MARKERS = [
+  'module ',
+  'difference(',
+  'union(',
+  'intersection(',
+  'translate(',
+  'rotate(',
+  'scale(',
+  'linear_extrude',
+  'rotate_extrude',
+  'hull(',
+  'minkowski(',
+  'cube(',
+  'sphere(',
+  'cylinder(',
+  'polygon(',
+  'polyhedron(',
+  'circle(',
+  'square(',
+  'text(',
+  '$fn',
+  '$fa',
+  '$fs',
+  'include <',
+  'use <',
+] as const;
 
+function scadMarkerCount(s: string): number {
+  const t = s.toLowerCase();
+  return SCAD_MARKERS.filter(m => t.includes(m)).length;
+}
+
+/** True if fenced or raw text is plausibly OpenSCAD (relaxed for small models). */
+function looksLikeOpenScadSource(s: string): boolean {
+  const t = s.trim();
+  if (t.length < 20 || t.includes('```')) return false;
+  const n = scadMarkerCount(t);
+  if (n >= 2) return true;
+  if (n >= 1 && t.length >= 35) return true;
+  return false;
+}
+
+/**
+ * Extract OpenSCAD from the model reply: prefer ```openscad``` / ```scad``` (longest if several),
+ * then any fenced block whose body looks like SCAD, then prose + raw SCAD heuristics.
+ */
+function inferOpenScadCodeFromModelReply(full: string): string | undefined {
+  const t = full.trim();
+  if (!t) return undefined;
+
+  const labeledRe = /```\s*(?:openscad|scad)\s*\n?([\s\S]*?)```/gi;
+  let bestLabeled = '';
+  let m: RegExpExecArray | null;
+  while ((m = labeledRe.exec(t)) !== null) {
+    const body = m[1].trim();
+    if (body.length > bestLabeled.length) bestLabeled = body;
+  }
+  if (bestLabeled) return bestLabeled;
+
+  const genericRe = /```[a-zA-Z0-9_-]*\s*\n([\s\S]*?)```/g;
+  const genericBodies: string[] = [];
+  while ((m = genericRe.exec(t)) !== null) genericBodies.push(m[1].trim());
+  genericBodies.sort((a, b) => b.length - a.length);
+  for (const body of genericBodies) {
+    if (looksLikeOpenScadSource(body)) return body;
+  }
+
+  const bareRe = /```\s*\n([\s\S]*?)```/g;
+  while ((m = bareRe.exec(t)) !== null) {
+    const body = m[1].trim();
+    if (looksLikeOpenScadSource(body)) return body;
+  }
+
+  if (t.includes('```')) return undefined;
+  const blocks = t.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
+  const codeBlocks = blocks.filter(b => looksLikeOpenScadSource(b));
+  if (codeBlocks.length) {
+    return codeBlocks.reduce((a, b) => (b.length > a.length ? b : a));
+  }
+  if (looksLikeOpenScadSource(t)) return t;
+  return undefined;
+}
+
+/** Reminder appended only to the API payload (not shown in the chat bubble). */
+const EDITOR_APPLY_REMINDER =
+  '\n\n(App integration: you must include exactly one ```openscad fenced block with the complete runnable script, or the editor will not update. Prose-only answers are not applied.)';
+
+function MessageContent({ text }: { text: string }) {
+  const prose = stripMarkdownCodeBlocks(text);
+  if (!prose) return null;
   return (
-    <>
-      {parts.map((part, i) => {
-        const codeMatch = part.match(/^```(?:openscad|scad)?\s*\n?([\s\S]*?)\n?```$/);
-        if (codeMatch) {
-          const code = codeMatch[1].trim();
-          return <CodeBlock key={i} code={code} onApply={() => onApplyCode(code)} />;
-        }
-        if (part.trim()) {
-          return (
-            <Typography key={i} variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-              {part}
-            </Typography>
-          );
-        }
-        return null;
-      })}
-    </>
+    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+      {prose}
+    </Typography>
   );
 }
 
@@ -151,11 +180,13 @@ export default function ChatPanel({ className, style }: { className?: string; st
 
   const theme = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
+  /** Must match an id from GET /api/v1/models (default until loadModels runs). */
   const [selectedModel, setSelectedModel] = useState('gemini/gemini-2.5-flash');
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -163,14 +194,23 @@ export default function ChatPanel({ className, style }: { className?: string; st
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autodebugRunning, setAutodebugRunning] = useState(false);
+  const [newSketchDialogOpen, setNewSketchDialogOpen] = useState(false);
 
   useEffect(() => {
     loadModels();
   }, []);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  /** Keep the message list pinned to the latest entry (runs after layout so scrollHeight is correct). */
+  useLayoutEffect(() => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const scrollToBottom = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    scrollToBottom();
+    const raf = requestAnimationFrame(scrollToBottom);
+    return () => cancelAnimationFrame(raf);
+  }, [messages, error]);
 
   const loadModels = async () => {
     try {
@@ -181,12 +221,25 @@ export default function ChatPanel({ className, style }: { className?: string; st
       }
     } catch (err) {
       log('Failed to load models: %O', err);
+      const msg = err instanceof Error ? err.message : 'Failed to load models';
+      setError(
+        `${msg}. Is the API running (e.g. uvicorn on port 8000 with Vite proxy)?`,
+      );
+      console.error('[ChatPanel] getModels failed:', err);
     }
   };
 
   const applyCodeToEditor = useCallback((code: string) => {
     model.source = code;
     model.render({ isPreview: true, now: true });
+  }, [model]);
+
+  const handleNewSketch = useCallback(() => {
+    model.source = '';
+    model.render({ isPreview: true, now: true });
+    setMessages([]);
+    setNewSketchDialogOpen(false);
+    setError(null);
   }, [model]);
 
   const handleSend = async () => {
@@ -213,20 +266,41 @@ export default function ChatPanel({ className, style }: { className?: string; st
     setInput('');
     setIsStreaming(true);
 
+    const existingCode = model.source.trim();
+    const contextPrefix = existingCode
+      ? `[EXISTING_OPENSCAD_CODE]\n${existingCode}\n[/EXISTING_OPENSCAD_CODE]\n\n`
+      : '';
+
     const apiMessages: ApiChatMessage[] = [
       ...messages.map(m => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       })),
-      { role: 'user' as const, content: trimmed },
+      { role: 'user' as const, content: contextPrefix + trimmed + EDITOR_APPLY_REMINDER },
     ];
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
+    let streamPaintRaf: number | null = null;
+
     try {
       let fullContent = '';
       let extractedCode: string | undefined;
+      let latestStreamText = '';
+      const scheduleAssistantStreamPaint = () => {
+        latestStreamText = fullContent;
+        if (streamPaintRaf != null) return;
+        streamPaintRaf = requestAnimationFrame(() => {
+          streamPaintRaf = null;
+          const paint = latestStreamText;
+          setMessages(prev => prev.map(m =>
+            m.id === assistantMessage.id
+              ? { ...m, content: paint, isStreaming: true }
+              : m,
+          ));
+        });
+      };
 
       for await (const event of streamChat(
         apiMessages,
@@ -234,13 +308,12 @@ export default function ChatPanel({ className, style }: { className?: string; st
         uploadedFiles.length > 0 ? uploadedFiles : undefined,
         abortController.signal,
       )) {
+        if (event.error) {
+          throw new Error(event.error);
+        }
         if (event.token) {
           fullContent += event.token;
-          setMessages(prev => prev.map(m =>
-            m.id === assistantMessage.id
-              ? { ...m, content: fullContent }
-              : m
-          ));
+          scheduleAssistantStreamPaint();
         }
 
         if (event.done) {
@@ -249,13 +322,32 @@ export default function ChatPanel({ className, style }: { className?: string; st
         }
       }
 
+      if (streamPaintRaf != null) {
+        cancelAnimationFrame(streamPaintRaf);
+        streamPaintRaf = null;
+      }
+
+      const codeToApply = extractedCode ?? inferOpenScadCodeFromModelReply(fullContent);
+
+      const norm = (s: string) => s.replace(/\r\n/g, '\n').trim();
+      let displayText = stripMarkdownCodeBlocks(fullContent);
+      if (codeToApply) {
+        displayText = norm(displayText).replace(norm(codeToApply), '');
+        displayText = stripMarkdownCodeBlocks(displayText).trim();
+        if (!displayText || displayText.length < 8) {
+          displayText = 'OpenSCAD code was applied to the editor. Open the Code tab when you want to view or edit it.';
+        }
+      } else {
+        displayText = displayText.trim() || fullContent.trim() || '(No response text)';
+      }
+
       setMessages(prev => prev.map(m =>
         m.id === assistantMessage.id
-          ? { ...m, content: fullContent, code: extractedCode, isStreaming: false }
+          ? { ...m, content: displayText, code: codeToApply, isStreaming: false }
           : m
       ));
 
-      if (extractedCode) {
+      if (codeToApply) {
         const addSystemMessage = (text: string) => {
           const sysMsg: ChatMessage = {
             id: uuidv4(),
@@ -267,7 +359,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
         };
 
         const result = await model.autoDebugAndRender(
-          extractedCode,
+          codeToApply,
           selectedModel,
           (status) => addSystemMessage(`\u{1F527} ${status}`),
         );
@@ -275,8 +367,9 @@ export default function ChatPanel({ className, style }: { className?: string; st
         if (result.success) {
           addSystemMessage('\u{2705} Model compiled and rendered successfully.');
         } else {
+          const detail = (result.error ?? '').trim() || '(no diagnostic text)';
           addSystemMessage(
-            `\u{274C} Auto-debug failed after retries.\n\n**Error:**\n\`\`\`\n${result.error}\n\`\`\``,
+            `\u{274C} Auto-debug failed after retries.\n\nError:\n${detail}`,
           );
         }
       }
@@ -292,10 +385,19 @@ export default function ChatPanel({ className, style }: { className?: string; st
       } else {
         log('Chat error: %O', err);
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        console.error('[ChatPanel] stream failed:', err);
         setError(errorMsg);
-        setMessages(prev => prev.filter(m => m.id !== assistantMessage.id));
+        setMessages(prev => prev.map(m =>
+          m.id === assistantMessage.id
+            ? { ...m, isStreaming: false, content: `**Error:** ${errorMsg}` }
+            : m
+        ));
       }
     } finally {
+      if (streamPaintRaf != null) {
+        cancelAnimationFrame(streamPaintRaf);
+        streamPaintRaf = null;
+      }
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
@@ -367,7 +469,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
       const msg: ChatMessage = {
         id: uuidv4(),
         role: 'assistant',
-        content: `**Auto-debug** (confidence: ${result.confidence})\n\n${result.explanation}\n\n\`\`\`openscad\n${result.fixed_code}\n\`\`\``,
+        content: `**Auto-debug** (confidence: ${result.confidence})\n\n${result.explanation}\n\n(Fixed code was applied to the editor.)`,
         code: result.fixed_code,
         timestamp: new Date(),
       };
@@ -390,6 +492,8 @@ export default function ChatPanel({ className, style }: { className?: string; st
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
         ...style,
       }}
     >
@@ -440,18 +544,34 @@ export default function ChatPanel({ className, style }: { className?: string; st
             <SettingsIcon />
           </IconButton>
         </Tooltip>
+
+        <Tooltip title="Start a new sketch from scratch">
+          <IconButton
+            onClick={() => setNewSketchDialogOpen(true)}
+            disabled={isStreaming}
+            size="small"
+            color="error"
+          >
+            <DeleteOutlineIcon />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       {/* Messages area */}
-      <Box sx={{
-        flex: 1,
-        overflow: 'auto',
-        px: 1,
-        py: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 1.5,
-      }}>
+      <Box
+        ref={messagesContainerRef}
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          px: 1,
+          py: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1.5,
+        }}
+      >
         {messages.length === 0 && (
           <Box sx={{
             display: 'flex',
@@ -524,14 +644,14 @@ export default function ChatPanel({ className, style }: { className?: string; st
                     {msg.content}
                   </Typography>
                 ) : (
-                  <MessageContent text={msg.content} onApplyCode={applyCodeToEditor} />
+                  <MessageContent text={msg.content} />
                 )}
 
                 {msg.isStreaming && (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
                     <CircularProgress size={12} />
                     <Typography variant="caption" color="text.secondary">
-                      thinking...
+                      Generating response…
                     </Typography>
                   </Box>
                 )}
@@ -633,6 +753,25 @@ export default function ChatPanel({ className, style }: { className?: string; st
       </Box>
 
       <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+
+      <Dialog
+        open={newSketchDialogOpen}
+        onClose={() => setNewSketchDialogOpen(false)}
+      >
+        <DialogTitle>New Sketch</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This will clear the editor and the entire chat history. You will lose
+            the current model and conversation. Continue?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNewSketchDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleNewSketch} color="error" variant="contained">
+            Delete &amp; Start Fresh
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

@@ -46,8 +46,10 @@ Higher layers are slower and more brittle; prefer pushing assertions down the py
 ```bash
 cd backend
 python -m pip install -r requirements.txt -r requirements-dev.txt
-pytest -q
+python -m pytest -q
 ```
+
+On Windows, prefer `python -m pytest` (and `python -m pip`) when the `Scripts` folder is not on PATH.
 
 ---
 

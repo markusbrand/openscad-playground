@@ -25,7 +25,7 @@ export async function getBrowserFSLibrariesMounts(archiveNames: string[]) {
   const Buffer = BrowserFS.BFSRequire('buffer').Buffer;
   const fetchData = async (url: string) => (await fetch(url)).arrayBuffer();
   const results: [string, ArrayBuffer][] =
-    await Promise.all(archiveNames.map(async (n: string) => [n, await fetchData(`./libraries/${n}.zip`)]));
+    await Promise.all(archiveNames.map(async (n: string) => [n, await fetchData(`/libraries/${n}.zip`)]));
   
   const zipMounts: FSMounts = {};
   for (const [n, zipData] of results) {

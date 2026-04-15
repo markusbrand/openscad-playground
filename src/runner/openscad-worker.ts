@@ -37,7 +37,8 @@ self.addEventListener('message', async (e: MessageEvent<OpenSCADInvocation>) => 
   let instance: any;
   const start = performance.now();
   try {
-    const { default: OpenSCAD } = await import(/* @vite-ignore */ '/openscad.js');
+    const openscadUrl = new URL('/openscad.js', self.location.origin).href;
+    const { default: OpenSCAD } = await import(/* @vite-ignore */ openscadUrl);
     instance = await OpenSCAD({
       noInitialRun: true,
       'print': (text: string) => {

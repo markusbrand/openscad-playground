@@ -16,6 +16,50 @@ import chroma from "chroma-js";
 
 const githubRx = /^https:\/\/github.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/;
 
+/** 1-based line numbers mentioned in OpenSCAD log / exception text (e.g. parser errors). */
+function extractOpenScadErrorLineNumbers(diagnostics: string): number[] {
+  const seen = new Set<number>();
+  const re = /\bline\s+(\d+)\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(diagnostics)) !== null) {
+    const n = parseInt(m[1], 10);
+    if (Number.isFinite(n) && n >= 1 && n < 100_000) seen.add(n);
+  }
+  return [...seen].sort((a, b) => a - b);
+}
+
+/**
+ * Enrich stderr for the auto-debug LLM: clarify mesh/FS noise after parse failures and
+ * append numbered source around reported lines.
+ */
+function augmentDiagnosticsForAutodebug(code: string, diagnostics: string): string {
+  const chunks: string[] = [];
+  if (
+    /parser error|syntax error|parse error/i.test(diagnostics)
+    && /failed to read output|playground\.off|errnoerror|fs error/i.test(diagnostics)
+  ) {
+    chunks.push(
+      'Note: The missing output / FS read error happens because OpenSCAD did not finish compiling — fix the parser/syntax issue first.',
+    );
+  }
+  chunks.push(diagnostics.trim());
+  const lineNums = extractOpenScadErrorLineNumbers(diagnostics);
+  if (lineNums.length > 0 && code.trim().length > 0) {
+    const lines = code.split(/\r?\n/);
+    chunks.push('\n--- Numbered source excerpt (use line numbers on the left) ---');
+    for (const n of lineNums.slice(0, 12)) {
+      const lo = Math.max(1, n - 2);
+      const hi = Math.min(lines.length, n + 2);
+      chunks.push(`\nAround editor line ${n}:`);
+      for (let i = lo; i <= hi; i++) {
+        const mark = i === n ? '>>>' : '   ';
+        chunks.push(`${mark} ${String(i).padStart(4)} | ${lines[i - 1]}`);
+      }
+    }
+  }
+  return chunks.filter(Boolean).join('\n');
+}
+
 export class Model {
   constructor(private fs: FS, public state: State, private setStateCallback?: (state: State) => void, 
     private statePersister?: StatePersister) {
@@ -177,7 +221,19 @@ export class Model {
     }
   }
 
+  /** Update active editor content without scheduling checkSyntax/render (used by auto-debug loop). */
+  private applySourceContentOnly(content: string): void {
+    this.mutate(s => {
+      s.params.sources = s.params.sources.map(src =>
+        src.path === s.params.activePath ? { path: src.path, content } : src,
+      );
+    });
+  }
+
   private async processSource() {
+    if (this.state.generatingCode) {
+      return;
+    }
     let src = this.state.params.sources.find(src => src.path === this.state.params.activePath);
     if (src && src.content == null) {
       let {path, url} = src;
@@ -349,69 +405,86 @@ export class Model {
     selectedModel: string,
     onStatusUpdate?: (status: string) => void,
   ): Promise<{success: boolean; finalCode: string; error?: string}> {
-    this.source = code;
-
-    const maxRetries = 3;
+    const maxRetries = 5;
     let currentCode = code;
-    let attempt = 0;
 
-    while (attempt < maxRetries) {
-      this.mutate(s => s.generatingCode = true);
-      onStatusUpdate?.(`Compiling OpenSCAD code (attempt ${attempt + 1}/${maxRetries})...`);
-
-      try {
-        await this.render({isPreview: true, now: true});
-      } catch {
-        // render errors are handled internally via state
-      }
-
-      const markerErrors = this.state.lastCheckerRun?.markers
-        ?.filter(m => m.severity >= 8)
-        ?.map(m => `Line ${m.startLineNumber}: ${m.message}`)
-        ?.join('\n') ?? '';
-
-      const logErrors = (this.state.currentRunLogs ?? [])
-        .filter(([type]) => type === 'stderr')
+    const buildDiagnosticText = (): string => {
+      // Use only this render's stdout/stderr plus the render exception string.
+      // Do not use lastCheckerRun.markers here — they can be stale vs. the code being auto-fixed.
+      const streamText = (this.state.currentRunLogs ?? [])
         .map(([, text]) => text)
+        .filter(Boolean)
         .join('\n');
+      const err = this.state.error?.trim();
+      const joined = [streamText, err].filter(Boolean).join('\n').trim();
+      return (
+        joined ||
+        '(No OpenSCAD output was captured. The preview worker may have failed before logging; see the browser console.)'
+      );
+    };
 
-      const allErrors = [markerErrors, logErrors].filter(Boolean).join('\n');
+    this.mutate(s => {
+      s.generatingCode = true;
+    });
+    this.applySourceContentOnly(code);
 
-      if (!allErrors && this.state.output) {
-        this.mutate(s => s.generatingCode = false);
-        onStatusUpdate?.('Model rendered successfully!');
-        return {success: true, finalCode: currentCode};
+    try {
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        onStatusUpdate?.(`Compiling OpenSCAD code (attempt ${attempt + 1}/${maxRetries})...`);
+
+        try {
+          await this.render({isPreview: true, now: true});
+        } catch {
+          // render errors are handled internally via state
+        }
+
+        const diagnosticText = buildDiagnosticText();
+        const fatal =
+          Boolean(this.state.error) || !this.state.output?.outFile;
+
+        if (!fatal) {
+          onStatusUpdate?.('Model rendered successfully!');
+          return {success: true, finalCode: currentCode};
+        }
+
+        if (attempt >= maxRetries - 1) {
+          return {success: false, finalCode: currentCode, error: diagnosticText};
+        }
+
+        onStatusUpdate?.(`Auto-fixing errors (attempt ${attempt + 1}/${maxRetries})...`);
+
+        try {
+          const {autodebug} = await import('../services/api');
+          const result = await autodebug({
+            code: currentCode,
+            errors: augmentDiagnosticsForAutodebug(currentCode, diagnosticText),
+            model: selectedModel,
+            attempt: attempt + 1,
+          });
+
+          currentCode = result.fixed_code;
+          this.applySourceContentOnly(currentCode);
+
+          onStatusUpdate?.(`Applied fix (confidence: ${result.confidence}). Re-compiling...`);
+        } catch (err) {
+          return {
+            success: false,
+            finalCode: currentCode,
+            error: `Auto-debug request failed: ${err}`,
+          };
+        }
       }
-
-      if (attempt >= maxRetries - 1) {
-        this.mutate(s => s.generatingCode = false);
-        return {success: false, finalCode: currentCode, error: allErrors};
-      }
-
-      attempt++;
-      onStatusUpdate?.(`Auto-fixing errors (attempt ${attempt}/${maxRetries})...`);
-
-      try {
-        const {autodebug} = await import('../services/api');
-        const result = await autodebug({
-          code: currentCode,
-          errors: allErrors,
-          model: selectedModel,
-          attempt,
-        });
-
-        currentCode = result.fixed_code;
-        this.source = currentCode;
-
-        onStatusUpdate?.(`Applied fix (confidence: ${result.confidence}). Re-compiling...`);
-      } catch (err) {
-        this.mutate(s => s.generatingCode = false);
-        return {success: false, finalCode: currentCode, error: `Auto-debug failed: ${err}`};
-      }
+      return {
+        success: false,
+        finalCode: currentCode,
+        error: 'Auto-debug ended without a result',
+      };
+    } finally {
+      this.mutate(s => {
+        s.generatingCode = false;
+      });
+      void this.checkSyntax();
     }
-
-    this.mutate(s => s.generatingCode = false);
-    return {success: false, finalCode: currentCode, error: 'Max retries exceeded'};
   }
 
   async render({isPreview, mountArchives, now, retryInOtherDim}: {isPreview: boolean, mountArchives?: boolean, now: boolean, retryInOtherDim?: boolean}) {
@@ -427,6 +500,7 @@ export class Model {
     }
     this.mutate(s => {
       s.currentRunLogs = [];
+      s.error = undefined;
       setRendering(s, true);
     });
 

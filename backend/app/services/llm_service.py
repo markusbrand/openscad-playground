@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
 import re
 from collections.abc import AsyncGenerator
 from pathlib import Path
@@ -19,8 +21,24 @@ logger = logging.getLogger(__name__)
 litellm.suppress_debug_info = True
 
 OPENSCAD_CODE_BLOCK_RE = re.compile(
-    r"```(?:openscad)?\s*\n(.*?)```", re.DOTALL
+    r"```\s*(?:openscad|scad)\s*\n?(.*?)```",
+    re.DOTALL | re.IGNORECASE,
 )
+# Optional legacy: ``` with no language tag but same structure
+BARE_TRIPLE_FENCE_RE = re.compile(r"```\s*\n(.*?)```", re.DOTALL)
+# Generic ```lang … ``` — used when the model picks another fence label
+GENERIC_CODE_FENCE_RE = re.compile(
+    r"```[a-zA-Z0-9_-]*\s*\n(.*?)```",
+    re.DOTALL,
+)
+
+# LiteLLM env var names per provider (same as KeyStore.PROVIDER_ENV_MAP)
+_LITELLM_API_KEY_ENV: dict[str, str] = {
+    "gemini": "GEMINI_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "mistral": "MISTRAL_API_KEY",
+}
 
 
 class LLMService:
@@ -58,36 +76,61 @@ class LLMService:
     ) -> AsyncGenerator[str, None]:
         """Yield SSE-formatted events for a streaming chat completion."""
         litellm_messages = self._build_messages(messages, model, files)
-        full_response = ""
+        max_stream_attempts = 4
+        delay_sec = 1.5
 
-        try:
-            response = await litellm.acompletion(
-                model=model,
-                messages=litellm_messages,
-                stream=True,
-            )
+        for stream_attempt in range(max_stream_attempts):
+            full_response = ""
+            try:
+                response = await litellm.acompletion(
+                    model=model,
+                    messages=litellm_messages,
+                    stream=True,
+                    **self._litellm_auth_kwargs(model),
+                )
 
-            async for chunk in response:
-                delta = chunk.choices[0].delta  # type: ignore[union-attr]
-                token = getattr(delta, "content", None) or ""
-                if token:
-                    full_response += token
-                    yield self._sse({"token": token, "done": False})
+                async for chunk in response:
+                    delta = chunk.choices[0].delta  # type: ignore[union-attr]
+                    token = getattr(delta, "content", None) or ""
+                    if token:
+                        full_response += token
+                        yield self._sse({"token": token, "done": False})
 
-            code = self._extract_openscad_code(full_response)
-            final_payload: dict[str, Any] = {
-                "token": "",
-                "done": True,
-                "full_response": full_response,
-            }
-            if code:
-                final_payload["code"] = code
+                code = self._extract_openscad_code(full_response)
+                final_payload: dict[str, Any] = {
+                    "token": "",
+                    "done": True,
+                    "full_response": full_response,
+                }
+                if code:
+                    final_payload["code"] = code
 
-            yield self._sse(final_payload)
+                yield self._sse(final_payload)
+                return
 
-        except Exception as exc:
-            logger.exception("LLM streaming error for model=%s", model)
-            yield self._sse({"error": str(exc), "done": True})
+            except Exception as exc:
+                partial = bool(full_response.strip())
+                transient = self._is_transient_llm_error(exc)
+                if (
+                    not partial
+                    and transient
+                    and stream_attempt < max_stream_attempts - 1
+                ):
+                    logger.warning(
+                        "LLM transient error (stream attempt %d/%d) model=%s: %s — retrying in %.1fs",
+                        stream_attempt + 1,
+                        max_stream_attempts,
+                        model,
+                        type(exc).__name__,
+                        delay_sec,
+                    )
+                    await asyncio.sleep(delay_sec)
+                    delay_sec = min(delay_sec * 2, 8.0)
+                    continue
+
+                logger.exception("LLM streaming error for model=%s", model)
+                yield self._sse({"error": self._format_llm_error(exc, model), "done": True})
+                return
 
     # ------------------------------------------------------------------
     # Auto-debug (non-streaming)
@@ -103,12 +146,20 @@ class LLMService:
         """Send code + errors to the LLM for an automated fix attempt."""
         prompt = (
             f"You are an OpenSCAD debugging assistant (attempt {attempt}).\n\n"
-            "The following OpenSCAD code produces errors. Fix the code and return:\n"
-            "1. The corrected, complete OpenSCAD code inside a ```openscad code block.\n"
-            "2. A short explanation of what was wrong.\n"
-            "3. Your confidence: high, medium, or low.\n\n"
+            "The script below fails to compile or preview in OpenSCAD. Fix it and respond with:\n"
+            "1. One short paragraph (outside any code fence) describing what was wrong.\n"
+            "2. A line with confidence: high, medium, or low.\n"
+            "3. The **complete corrected** OpenSCAD program in a **single** ```openscad fenced block.\n\n"
+            "Constraints:\n"
+            "- Prefer the **smallest change** that fixes the reported errors; keep modules, names, and comments "
+            "unless they are wrong.\n"
+            "- If the log shows **Parser error** or **syntax error** at a line number, fix that exact spot first "
+            "(missing `;`, mismatched `()`/`{}`/`[]`, stray commas, invalid identifiers, or text outside comments).\n"
+            "- Ignore secondary **FS / .off read** errors when a parser error is present — they disappear once the script compiles.\n"
+            "- The fenced block must be valid OpenSCAD only (no markdown, no prose inside the fence).\n"
+            "- Do not return a partial file or a diff; return the full script.\n\n"
             f"--- Code ---\n{code}\n\n"
-            f"--- Errors ---\n{errors}\n"
+            f"--- Errors / logs ---\n{errors}\n"
         )
 
         messages = [
@@ -116,26 +167,46 @@ class LLMService:
             {"role": "user", "content": prompt},
         ]
 
-        try:
-            response = await litellm.acompletion(model=model, messages=messages)
-            content: str = response.choices[0].message.content or ""  # type: ignore[union-attr]
+        max_attempts = 4
+        delay_sec = 1.5
+        for call_attempt in range(max_attempts):
+            try:
+                response = await litellm.acompletion(
+                    model=model,
+                    messages=messages,
+                    **self._litellm_auth_kwargs(model),
+                )
+                content: str = response.choices[0].message.content or ""  # type: ignore[union-attr]
 
-            fixed_code = self._extract_openscad_code(content) or content
-            explanation = self._extract_explanation(content, fixed_code)
-            confidence = self._extract_confidence(content)
+                fixed_code = self._extract_openscad_code(content) or content
+                explanation = self._extract_explanation(content, fixed_code)
+                confidence = self._extract_confidence(content)
 
-            return {
-                "fixed_code": fixed_code,
-                "explanation": explanation,
-                "confidence": confidence,
-            }
-        except Exception as exc:
-            logger.exception("Auto-debug error for model=%s attempt=%d", model, attempt)
-            return {
-                "fixed_code": code,
-                "explanation": f"Auto-debug failed: {exc}",
-                "confidence": "low",
-            }
+                return {
+                    "fixed_code": fixed_code,
+                    "explanation": explanation,
+                    "confidence": confidence,
+                }
+            except Exception as exc:
+                transient = self._is_transient_llm_error(exc)
+                if transient and call_attempt < max_attempts - 1:
+                    logger.warning(
+                        "LLM transient error (autodebug attempt %d/%d) model=%s: %s — retrying in %.1fs",
+                        call_attempt + 1,
+                        max_attempts,
+                        model,
+                        type(exc).__name__,
+                        delay_sec,
+                    )
+                    await asyncio.sleep(delay_sec)
+                    delay_sec = min(delay_sec * 2, 8.0)
+                    continue
+                logger.exception("Auto-debug error for model=%s attempt=%d", model, attempt)
+                return {
+                    "fixed_code": code,
+                    "explanation": f"Auto-debug failed: {self._format_llm_error(exc, model)}",
+                    "confidence": "low",
+                }
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -189,10 +260,79 @@ class LLMService:
                 ]
                 break
 
-    @staticmethod
-    def _extract_openscad_code(text: str) -> str | None:
-        match = OPENSCAD_CODE_BLOCK_RE.search(text)
-        return match.group(1).strip() if match else None
+    _SCAD_MARKERS: tuple[str, ...] = (
+        "module ",
+        "difference(",
+        "union(",
+        "intersection(",
+        "translate(",
+        "rotate(",
+        "scale(",
+        "linear_extrude",
+        "rotate_extrude",
+        "hull(",
+        "minkowski(",
+        "cube(",
+        "sphere(",
+        "cylinder(",
+        "polygon(",
+        "polyhedron(",
+        "circle(",
+        "square(",
+        "text(",
+        "$fn",
+        "$fa",
+        "$fs",
+        "include <",
+        "use <",
+    )
+
+    @classmethod
+    def _scad_marker_hits(cls, text: str) -> int:
+        lower = text.lower()
+        return sum(1 for m in cls._SCAD_MARKERS if m in lower)
+
+    @classmethod
+    def _looks_like_openscad_source(cls, text: str) -> bool:
+        """Heuristic: fenced or raw body is plausibly OpenSCAD (works for small models)."""
+        t = text.strip()
+        if len(t) < 20 or "```" in t:
+            return False
+        n = cls._scad_marker_hits(t)
+        if n >= 2:
+            return True
+        if n >= 1 and len(t) >= 35:
+            return True
+        return False
+
+    @classmethod
+    def _extract_openscad_code(cls, text: str) -> str | None:
+        """Extract OpenSCAD from fenced blocks, generic fences, or raw SCAD-only replies."""
+        if not (text and text.strip()):
+            return None
+        labeled_bodies = [m.group(1).strip() for m in OPENSCAD_CODE_BLOCK_RE.finditer(text) if m.group(1).strip()]
+        if labeled_bodies:
+            return max(labeled_bodies, key=len)
+        bare_bodies = [m.group(1).strip() for m in BARE_TRIPLE_FENCE_RE.finditer(text) if m.group(1).strip()]
+        for body in sorted(bare_bodies, key=len, reverse=True):
+            if cls._looks_like_openscad_source(body):
+                return body
+        generic_hits: list[str] = []
+        for m in GENERIC_CODE_FENCE_RE.finditer(text):
+            body = m.group(1).strip()
+            if cls._looks_like_openscad_source(body):
+                generic_hits.append(body)
+        if generic_hits:
+            return max(generic_hits, key=len)
+        stripped = text.strip()
+        if "```" not in stripped:
+            blocks = [b.strip() for b in re.split(r"\n{2,}", stripped) if b.strip()]
+            code_blocks = [b for b in blocks if cls._looks_like_openscad_source(b)]
+            if code_blocks:
+                return max(code_blocks, key=len)
+        if cls._looks_like_openscad_source(stripped):
+            return stripped
+        return None
 
     @staticmethod
     def _extract_explanation(full_text: str, code: str) -> str:
@@ -212,3 +352,68 @@ class LLMService:
     @staticmethod
     def _sse(data: dict[str, Any]) -> str:
         return f"data: {json.dumps(data)}\n\n"
+
+    @staticmethod
+    def _provider_prefix(model: str) -> str:
+        return model.split("/", 1)[0].lower() if "/" in model else ""
+
+    @classmethod
+    def _litellm_auth_kwargs(cls, model: str) -> dict[str, Any]:
+        """Pass API keys explicitly so LiteLLM uses AI Studio / provider keys predictably."""
+        prefix = cls._provider_prefix(model)
+        env_name = _LITELLM_API_KEY_ENV.get(prefix)
+        if not env_name:
+            return {}
+        key = os.getenv(env_name)
+        if not key:
+            return {}
+        return {"api_key": key}
+
+    @staticmethod
+    def _is_transient_llm_error(exc: Exception) -> bool:
+        """True for provider overload / capacity errors that often succeed on retry."""
+        raw = str(exc).lower()
+        return any(
+            marker in raw
+            for marker in (
+                "503",
+                "504",
+                "429",
+                "unavailable",
+                "resource_exhausted",
+                "high demand",
+                "try again later",
+                "overloaded",
+                "deadline exceeded",
+                "serviceunavailable",
+                "midstreamfallbackerror",
+            )
+        )
+
+    @staticmethod
+    def _format_llm_error(exc: Exception, model: str) -> str:
+        """Turn long provider tracebacks into short, actionable messages where possible."""
+        raw = str(exc)
+        m = model.lower()
+        if LLMService._is_transient_llm_error(exc):
+            return (
+                "The model provider is temporarily overloaded or rate-limited (often HTTP 503). "
+                "That is usually short-lived. Wait a minute and send your message again, "
+                "or choose another model in the dropdown (e.g. a different Gemini tier or OpenAI / Ollama)."
+            )
+        if m.startswith("gemini/") and (
+            "API_KEY_INVALID" in raw
+            or "API key not valid" in raw
+            or "invalid api key" in raw.lower()
+            or "AuthenticationError" in raw
+        ):
+            return (
+                "Gemini API key was rejected by Google (wrong key, revoked, or not an AI Studio key). "
+                "Create a key at https://aistudio.google.com/apikey (starts with AIza…). "
+                "Put it in backend/.env as GEMINI_API_KEY=… (no quotes) or save under Settings → Gemini. "
+                "Restart the API after changing .env. If you still use a valid .env key, remove any stale "
+                "Gemini key in Settings and save again, or delete backend/data/api_keys.json while the server is stopped."
+            )
+        if len(raw) > 2000:
+            return raw[:2000] + "\n…(truncated)"
+        return raw

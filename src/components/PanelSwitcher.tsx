@@ -40,7 +40,7 @@ export default function PanelSwitcher() {
   const handleMultiViewToggle = (id: string) => {
     if (id === 'chat' || id === 'editor') {
       model.mutate(s => {
-        s.view.activeView = id as 'chat' | 'code';
+        s.view.activeView = id === 'chat' ? 'chat' : 'code';
       });
     }
   };
@@ -82,18 +82,21 @@ export default function PanelSwitcher() {
 
         {state.view.layout.mode === 'multi'
           ? <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, justifyContent: 'center', flex: 1, m: '5px' }}>
-              <ToggleButtonGroup size="small" exclusive value={activeView === 'chat' ? 'chat' : 'editor'}>
-                {multiTargets.map(({label, id}) => 
-                  <ToggleButton
-                    key={id}
-                    value={id}
-                    selected={activeView === id || (activeView === 'code' && id === 'editor')}
-                    onChange={() => handleMultiViewToggle(id)}
-                  >
+              <ToggleButtonGroup
+                size="small"
+                exclusive
+                value={activeView === 'chat' ? 'chat' : 'editor'}
+                onChange={(_e, newId) => {
+                  if (newId === null) return;
+                  handleMultiViewToggle(newId);
+                }}
+              >
+                {multiTargets.map(({ label, id }) => (
+                  <ToggleButton key={id} value={id}>
                     {iconMap[id as SingleLayoutComponentId]}
                     <Box component="span" sx={{ ml: 0.5 }}>{label}</Box>
                   </ToggleButton>
-                )}
+                ))}
               </ToggleButtonGroup>
             </Box>
           : <Tabs

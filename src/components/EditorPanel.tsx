@@ -1,6 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import React, { CSSProperties, useContext, useState } from 'react';
+import React, { CSSProperties, useContext, useEffect, useState } from 'react';
 import Editor, { loader, Monaco } from '@monaco-editor/react';
 import openscadEditorOptions from '../language/openscad-editor-options.ts';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
@@ -38,9 +38,21 @@ export default function EditorPanel({className, style}: {className?: string, sty
   if (!model) throw new Error('No model');
 
   const state = model.state;
+  const layout = state.view.layout;
+  const activeView = state.view.activeView ?? 'chat';
+  const editorIsVisible =
+    layout.mode === 'multi'
+      ? activeView === 'code'
+      : layout.mode === 'single' && layout.focus === 'editor';
 
   const [editor, setEditor] = useState(null as monaco.editor.IStandaloneCodeEditor | null)
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+
+  useEffect(() => {
+    if (!editor || !editorIsVisible) return;
+    const id = requestAnimationFrame(() => editor.layout());
+    return () => cancelAnimationFrame(id);
+  }, [editor, editorIsVisible]);
 
   if (editor) {
     const checkerRun = state.lastCheckerRun;

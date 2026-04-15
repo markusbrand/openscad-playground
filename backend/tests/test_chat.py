@@ -7,6 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
+from app.services.llm_service import LLMService
+
 
 class _Delta:
     def __init__(self, content: str) -> None:
@@ -156,3 +158,23 @@ async def test_autodebug_llm_failure_returns_fallback(client) -> None:
     assert body["fixed_code"] == "sphere(5);"
     assert "Auto-debug failed" in body["explanation"]
     assert body["confidence"] == "low"
+
+
+def test_extract_openscad_prefers_code_paragraph_after_prose() -> None:
+    prose = "Sure, here is a box.\n\n"
+    code = (
+        "$fn = 32;\n"
+        "module a() {\n"
+        "  difference() { cube(10); sphere(6); }\n"
+        "}\n"
+        "a();\n"
+    )
+    out = LLMService._extract_openscad_code(prose + code)
+    assert out is not None
+    assert "module a()" in out
+    assert "Sure" not in out
+
+
+def test_extract_openscad_labeled_fence() -> None:
+    full = "```openscad\ncube(1);\n```"
+    assert LLMService._extract_openscad_code(full) == "cube(1);"

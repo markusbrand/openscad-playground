@@ -20,6 +20,8 @@ Core editor capabilities from upstream remain: OpenSCAD in the browser (Manifold
 
 **Prerequisites:** Node.js 20+, Python 3.12+
 
+**Windows:** Use **`python`** on your PATH (and **`python -m pip`**, **`python -m pytest`**, **`python -m uvicorn`**). You do **not** need the **`py`** launcher; if `python` is not found in a new terminal, add the folder that contains `python.exe` and its `Scripts` subfolder to your **user** PATH, then open a new shell.
+
 ```bash
 git clone <repo-url>
 cd openscad-playground
@@ -33,9 +35,9 @@ npm run dev           # Vite — http://localhost:5173
 cd backend
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env        # Add API keys and CORS origins
-uvicorn app.main:app --reload --port 8000
+python -m pip install -r requirements.txt
+cp .env.example .env        # Windows: copy .env.example .env — add API keys and CORS origins
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
 Point the frontend at the backend (see [Configuration](#configuration)). For Docker-style CORS, include `http://localhost:5173` in `CORS_ALLOWED_ORIGINS` in `backend/.env`.

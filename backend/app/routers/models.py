@@ -16,19 +16,19 @@ router = APIRouter(tags=["models"])
 
 KNOWN_MODELS: list[ModelInfo] = [
     ModelInfo(
-        id="gemini/gemini-2.5-flash-preview-04-17",
-        name="Gemini 2.5 Flash (Preview)",
+        id="gemini/gemini-2.5-flash",
+        name="Gemini 2.5 Flash",
         provider="gemini",
-        description="Google's fast & capable multimodal model",
+        description="Google's fast & capable multimodal model (stable id)",
         supports_vision=True,
         license_info="Proprietary – Google",
         pricing_tier="free-tier available",
     ),
     ModelInfo(
-        id="gemini/gemini-2.5-pro-preview-03-25",
-        name="Gemini 2.5 Pro (Preview)",
+        id="gemini/gemini-2.5-pro",
+        name="Gemini 2.5 Pro",
         provider="gemini",
-        description="Google's most capable reasoning model",
+        description="Google's capable reasoning model (stable id)",
         supports_vision=True,
         license_info="Proprietary – Google",
         pricing_tier="paid",

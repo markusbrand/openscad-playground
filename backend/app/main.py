@@ -35,7 +35,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     _seed_env_keys()
 
     logger.info("Initialising services …")
-    app.state.key_store = KeyStore(keys_file=settings.api_keys_file)
+    app.state.key_store = KeyStore(keys_file=str(settings.api_keys_path))
+    # Keys saved in the UI are written to api_keys.json and applied to os.environ first.
+    # If the same provider is set in backend/.env, .env must win (fixes stale/wrong UI keys).
+    _enforce_settings_api_keys_over_key_store()
+
     app.state.llm_service = LLMService(master_prompt_path=settings.master_prompt_resolved)
     app.state.export_service = ExportService()
     logger.info("OpenSCAD AI Backend ready")
@@ -47,15 +51,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def _seed_env_keys() -> None:
     """Push any API keys present in settings into os.environ for LiteLLM."""
-    pairs = {
-        "GEMINI_API_KEY": settings.gemini_api_key,
-        "OPENAI_API_KEY": settings.openai_api_key,
-        "ANTHROPIC_API_KEY": settings.anthropic_api_key,
-        "MISTRAL_API_KEY": settings.mistral_api_key,
-    }
-    for env_var, value in pairs.items():
+    for env_var, value in _settings_api_key_pairs():
         if value:
             os.environ.setdefault(env_var, value)
+
+
+def _settings_api_key_pairs() -> list[tuple[str, str | None]]:
+    return [
+        ("GEMINI_API_KEY", settings.gemini_api_key),
+        ("OPENAI_API_KEY", settings.openai_api_key),
+        ("ANTHROPIC_API_KEY", settings.anthropic_api_key),
+        ("MISTRAL_API_KEY", settings.mistral_api_key),
+    ]
+
+
+def _enforce_settings_api_keys_over_key_store() -> None:
+    """When backend/.env defines a provider key, it overrides KeyStore (UI) values for LiteLLM."""
+    logger = logging.getLogger(__name__)
+    applied: list[str] = []
+    for env_var, value in _settings_api_key_pairs():
+        if value:
+            os.environ[env_var] = value
+            applied.append(env_var)
+    if applied:
+        logger.info(
+            "API keys from application settings (.env / environment) override KeyStore for: %s",
+            ", ".join(applied),
+        )
 
 
 app = FastAPI(

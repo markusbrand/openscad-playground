@@ -97,26 +97,10 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
 
   function getPanelStyle(id: MultiLayoutComponentId | 'chat'): CSSProperties {
     if (layout.mode === 'multi') {
-      if (id === 'chat') {
-        return {
-          flex: 1,
-          maxWidth: '50%',
-          display: activeView === 'chat' ? 'flex' : 'none',
-        };
-      }
-      if (id === 'editor') {
-        return {
-          flex: 1,
-          maxWidth: '50%',
-          display: activeView === 'code' ? 'flex' : 'none',
-        };
-      }
-      if (id === 'viewer') {
-        return {
-          flex: 1,
-          maxWidth: '50%',
-          display: 'flex',
-        };
+      // Multi layout uses a dedicated left column (chat/code) + right viewer in JSX;
+      // only customizer styling is handled here.
+      if (id === 'chat' || id === 'editor' || id === 'viewer') {
+        return {};
       }
       // customizer in multi mode - hidden (accessed via single mode)
       return { display: 'none' };
@@ -138,36 +122,97 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
       <ThemeModeContext.Provider value={themeModeContextValue}>
         <ModelContext.Provider value={model}>
           <FSContext.Provider value={fs}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-              
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+                height: '100%',
+                overflow: 'hidden',
+              }}
+            >
               <PanelSwitcher />
         
               <Box sx={{
                 display: 'flex',
                 flexDirection: mode === 'multi' ? 'row' : 'column',
                 flex: 1,
+                minHeight: 0,
+                overflow: 'hidden',
                 ...(mode !== 'multi' ? { position: 'relative' } : {}),
               }}>
 
-                <ChatPanel
-                  className={`
-                    opacity-animated
-                    ${mode === 'single' && singleFocus !== 'chat' ? 'opacity-0' : ''}
-                    ${mode === 'single' ? 'absolute-fill' : ''}
-                  `}
-                  style={getPanelStyle('chat')}
-                />
-                <EditorPanel className={`
-                  opacity-animated
-                  ${mode === 'single' && singleFocus !== 'editor' ? 'opacity-0' : ''}
-                  ${mode === 'single' ? 'absolute-fill' : ''}
-                `} style={getPanelStyle('editor')} />
-                <ViewerPanel className={mode === 'single' ? `absolute-fill` : ''} style={getPanelStyle('viewer')} />
-                <CustomizerPanel className={`
-                  opacity-animated
-                  ${mode === 'single' && singleFocus !== 'customizer' ? 'opacity-0' : ''}
-                  ${mode === 'single' ? `absolute-fill` : ''}
-                `} style={getPanelStyle('customizer')} />
+                {mode === 'multi' ? (
+                  <>
+                    <Box sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      maxWidth: '50%',
+                      minHeight: 0,
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      position: 'relative',
+                    }}>
+                      <ChatPanel
+                        className="opacity-animated"
+                        style={{
+                          flex: 1,
+                          minHeight: 0,
+                          display: activeView === 'chat' ? 'flex' : 'none',
+                        }}
+                      />
+                      <EditorPanel
+                        className="opacity-animated"
+                        style={{
+                          flex: 1,
+                          minHeight: 0,
+                          display: activeView === 'code' ? 'flex' : 'none',
+                        }}
+                      />
+                    </Box>
+                    <ViewerPanel
+                      className=""
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        maxWidth: '50%',
+                        minHeight: 0,
+                        display: 'flex',
+                      }}
+                    />
+                    <CustomizerPanel style={getPanelStyle('customizer')} />
+                  </>
+                ) : (
+                  <>
+                    <ChatPanel
+                      className={`
+                        opacity-animated
+                        ${singleFocus !== 'chat' ? 'opacity-0' : ''}
+                        absolute-fill
+                      `}
+                      style={getPanelStyle('chat')}
+                    />
+                    <EditorPanel
+                      className={`
+                        opacity-animated
+                        ${singleFocus !== 'editor' ? 'opacity-0' : ''}
+                        absolute-fill
+                      `}
+                      style={getPanelStyle('editor')}
+                    />
+                    <ViewerPanel className="absolute-fill" style={getPanelStyle('viewer')} />
+                    <CustomizerPanel
+                      className={`
+                        opacity-animated
+                        ${singleFocus !== 'customizer' ? 'opacity-0' : ''}
+                        absolute-fill
+                      `}
+                      style={getPanelStyle('customizer')}
+                    />
+                  </>
+                )}
               </Box>
 
               <Footer />

@@ -16,10 +16,12 @@ export interface UploadedFile {
 }
 
 export interface StreamEvent {
-  token: string;
+  token?: string;
   done: boolean;
   full_response?: string;
   code?: string;
+  /** Present when the backend reports an LLM or provider failure (still with done: true). */
+  error?: string;
 }
 
 export interface AutodebugRequest {
