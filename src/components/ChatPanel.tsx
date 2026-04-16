@@ -223,7 +223,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
       log('Failed to load models: %O', err);
       const msg = err instanceof Error ? err.message : 'Failed to load models';
       setError(
-        `${msg}. Is the API running (e.g. uvicorn on port 8000 with Vite proxy)?`,
+        `${msg}. Is the API running (uvicorn / python dev.py) and is the Vite dev proxy pointing at the same BACKEND_PORT?`,
       );
       console.error('[ChatPanel] getModels failed:', err);
     }

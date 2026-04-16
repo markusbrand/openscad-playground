@@ -29,7 +29,7 @@ cd openscad-playground
 # Frontend
 npm install
 npm run build:libs    # OpenSCAD WASM and libraries (first time / after clean)
-npm run dev           # Vite — http://localhost:5173
+npm run dev           # Vite — port from FRONTEND_DEV_PORT (default 5173), see .env.example
 
 # Backend (separate terminal)
 cd backend
@@ -37,10 +37,10 @@ python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 python -m pip install -r requirements.txt
 cp .env.example .env        # Windows: copy .env.example .env — add API keys and CORS origins
-python -m uvicorn app.main:app --reload --port 8000
+python dev.py               # port from BACKEND_PORT (default 8000); or: npm run dev:backend from repo root
 ```
 
-Point the frontend at the backend (see [Configuration](#configuration)). For Docker-style CORS, include `http://localhost:5173` in `CORS_ALLOWED_ORIGINS` in `backend/.env`.
+Ports are configurable via **root** `.env` and/or **`backend/.env`** (see [Configuration](#configuration)): `FRONTEND_DEV_PORT`, `BACKEND_PORT`, and for Docker `FRONTEND_PORT`. Set `CORS_ALLOWED_ORIGINS` in `backend/.env` to include your Vite origin (for example `http://localhost:<FRONTEND_DEV_PORT>`).
 
 ## Docker deployment
 
@@ -73,11 +73,14 @@ Design decisions are recorded as **ADRs**: [docs/adrs/](docs/adrs/). Documentati
 
 ## Configuration
 
-- **Root** [`.env.example`](.env.example) — `docker compose` (e.g. `FRONTEND_PORT`, paths shared with compose).
-- **Backend** [`backend/.env.example`](backend/.env.example) — local `uvicorn` and container runtime:
+- **Root** [`.env.example`](.env.example) — `docker compose` (**`FRONTEND_PORT`**, **`BACKEND_PORT`**, shared dev defaults such as **`FRONTEND_DEV_PORT`**).
+- **Backend** [`backend/.env.example`](backend/.env.example) — local `python dev.py` / Docker: settings load **repo root `.env` first**, then **`backend/.env`** (backend wins on duplicate keys).
 
 | Variable | Purpose |
 |----------|---------|
+| `FRONTEND_PORT` | Published host port for the frontend container (`docker compose`; default **3080**) |
+| `BACKEND_PORT` | TCP port for uvicorn (`python dev.py` / Docker backend; default **8000**) |
+| `FRONTEND_DEV_PORT` | Vite dev server port (`npm run dev`; default **5173**); repo root and/or `backend/.env` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to call the API |
 | `MASTER_PROMPT_PATH` | Path to server system prompt (default: `prompts/master-prompt.md`) |
 | `OLLAMA_BASE_URL` | Ollama API base URL for local models |

@@ -10,10 +10,22 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Directory that contains `app/` and `data/` (always backend/, regardless of cwd).
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_ENV = BACKEND_ROOT / ".env"
+_ROOT_ENV = BACKEND_ROOT.parent / ".env"
+
+
+def _resolved_env_files() -> tuple[str, ...] | None:
+    """Repo root `.env` first, then `backend/.env` (later file wins on duplicate keys)."""
+    paths: list[Path] = []
+    if _ROOT_ENV.is_file():
+        paths.append(_ROOT_ENV)
+    if _DEFAULT_ENV.is_file():
+        paths.append(_DEFAULT_ENV)
+    return tuple(str(p) for p in paths) if paths else None
 
 
 class Settings(BaseSettings):
     cors_allowed_origins: str = "http://localhost:5173"
+    backend_port: int = 8000
     master_prompt_path: str = "prompts/master-prompt.md"
     api_keys_file: str = "data/api_keys.json"
     ollama_base_url: str = "http://localhost:11434"
@@ -27,10 +39,17 @@ class Settings(BaseSettings):
     mistral_api_key: str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=_DEFAULT_ENV if _DEFAULT_ENV.is_file() else None,
+        env_file=_resolved_env_files(),
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("backend_port", mode="after")
+    @classmethod
+    def _backend_port_in_range(cls, v: int) -> int:
+        if not (1 <= v <= 65535):
+            raise ValueError("BACKEND_PORT must be between 1 and 65535")
+        return v
 
     @field_validator(
         "gemini_api_key",

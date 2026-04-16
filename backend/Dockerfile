@@ -18,4 +18,5 @@ EXPOSE 8000
 
 USER appuser
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# BACKEND_PORT from compose env_file (default 8000). Must match nginx upstream if you proxy by port.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_PORT:-8000}"]

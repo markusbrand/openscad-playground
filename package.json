@@ -29,6 +29,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:backend": "cd backend && .venv/bin/python dev.py",
     "build": "vite build",
     "preview": "vite preview",
     "build:libs": "cross-env LIBS_BUILD_MODE=all webpack --config webpack.libs.config.js",
