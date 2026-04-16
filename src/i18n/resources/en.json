@@ -1,0 +1,150 @@
+{
+  "api": {
+    "backendSetupHint": "Start the backend with `npm run dev:backend`. `BACKEND_PORT` in `.env` must match the Vite proxy; after changing the port, restart `npm run dev`.",
+    "detailPrefix": " Details: {{body}}",
+    "resources": {
+      "models": "Model list",
+      "chatStream": "Chat stream",
+      "autodebug": "Auto-debug",
+      "apiKeys": "API keys",
+      "apiKeysSave": "Saving API key",
+      "apiKeysDelete": "Deleting API key",
+      "health": "Health check",
+      "scadExport": "SCAD export"
+    },
+    "errors": {
+      "noConnection": "Cannot reach the backend. {{hint}}",
+      "badGateway": "{{resource}}: backend unreachable or proxy error (HTTP {{status}} {{statusText}}).{{detail}} {{hint}}",
+      "forbidden": "{{resource}}: access denied (HTTP {{status}}).{{detail}}",
+      "server": "{{resource}}: server error (HTTP {{status}}).{{detail}} Check the backend terminal log.",
+      "notFound": "{{resource}}: API endpoint not found (HTTP 404).{{detail}}",
+      "generic": "{{resource}}: request failed (HTTP {{status}}).{{detail}}",
+      "emptyStreamBody": "Chat stream: empty response from the server (no response body)."
+    }
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "download": "Download"
+  },
+  "chat": {
+    "emptyHint": "Ask me to generate OpenSCAD code, or describe the 3D model you want to create.",
+    "placeholder": "Describe your 3D model…",
+    "tooltipAttach": "Attach files (.stl, .scad, .png, .jpg)",
+    "tooltipStop": "Stop generation",
+    "tooltipSend": "Send message (Enter)",
+    "tooltipAutodebug": "Auto-debug current errors",
+    "tooltipSettings": "API key settings",
+    "tooltipNewSketch": "Start a new sketch from scratch",
+    "generating": "Generating response…",
+    "newSketchTitle": "New Sketch",
+    "newSketchBody": "This will clear the editor and the entire chat history. You will lose the current model and conversation. Continue?",
+    "newSketchConfirm": "Delete & start fresh",
+    "codeAppliedShort": "OpenSCAD code was applied to the editor. Open the Code tab when you want to view or edit it.",
+    "noResponseText": "(No response text)",
+    "unknownError": "Unknown error while chatting.",
+    "loadModelsFallback": "Could not load the model list.",
+    "noStderr": "No errors (stderr) in the current build log.",
+    "autodebugFailed": "Auto-debug failed.",
+    "autodebugRetriesFailed": "❌ Auto-debug failed after several attempts.\n\nError:\n{{detail}}",
+    "noDiagnostic": "(no diagnostic text)",
+    "successCompile": "✅ Model compiled and rendered successfully.",
+    "cancelled": "(cancelled)",
+    "errorPrefix": "**Error:** {{message}}",
+    "editorPayloadReminder": "\n\n(App integration: you must include exactly one ```openscad fenced block with the complete runnable script, or the editor will not update. Prose-only answers are not applied.)",
+    "autodebugResult": "**Auto-debug** (confidence: {{confidence}})\n\n{{explanation}}\n\n(Fixed code was applied to the editor.)"
+  },
+  "footer": {
+    "previewing": "Previewing…",
+    "rendering": "Rendering…",
+    "render": "Render"
+  },
+  "panel": {
+    "chat": "Chat",
+    "code": "Code",
+    "view": "View",
+    "customize": "Customize"
+  },
+  "settingsMenu": {
+    "title": "Settings menu",
+    "layoutMulti": "Switch to single panel mode",
+    "layoutSingle": "Switch to side-by-side mode",
+    "axesHide": "Hide axes",
+    "axesShow": "Show axes",
+    "lineNumbersHide": "Hide line numbers",
+    "lineNumbersShow": "Show line numbers",
+    "themeDark": "Switch to dark mode",
+    "themeLight": "Switch to light mode",
+    "language": "Language",
+    "clearStorage": "Clear local storage",
+    "clearTitle": "Clear local storage",
+    "clearBody": "This will clear all the edits you've made and files you've created in this playground and will reset it to factory defaults. Are you sure you wish to proceed? (You might lose your models!)",
+    "clearConfirm": "Clear all files!"
+  },
+  "settingsDialog": {
+    "title": "API key configuration",
+    "configured": "Configured",
+    "notConfigured": "Not configured",
+    "currentKey": "Current key:",
+    "apiKey": "API Key",
+    "endpointUrl": "Endpoint URL",
+    "saveFailed": "Save failed.",
+    "deleteFailed": "Delete failed.",
+    "loadKeysFailed": "Could not load API key status.",
+    "close": "Close",
+    "save": "Save",
+    "saving": "Saving…",
+    "remove": "Remove"
+  },
+  "editor": {
+    "menuTitle": "Editor menu",
+    "newProject": "New project",
+    "shareProject": "Share project",
+    "newFile": "New file",
+    "copyToNew": "Copy to new file",
+    "uploadFiles": "Upload file(s)",
+    "downloadSources": "Download sources",
+    "selectAll": "Select All",
+    "find": "Find",
+    "backTo": "Go back to {{path}}",
+    "renderAction": "Render OpenSCAD",
+    "previewAction": "Preview OpenSCAD",
+    "saveDisabled": "Save (disabled)",
+    "saveProject": "Save OpenSCAD project"
+  },
+  "export": {
+    "downloadScad": "Download SCAD",
+    "scadSource": "SCAD (OpenSCAD source)",
+    "freecad": "Export for FreeCAD…",
+    "downloadGlb": "Download GLB",
+    "glbLabel": "GLB (binary glTF)",
+    "download3mf": "Download 3MF",
+    "threeMfLabel": "3MF (3D Manufacturing Format)",
+    "downloadStl": "Download STL",
+    "stlLabel": "STL (Stereolithography)",
+    "svg": "SVG",
+    "svgLabel": "SVG (Scalable Vector Graphics)",
+    "dxf": "DXF",
+    "dxfLabel": "DXF (Drawing Exchange Format)",
+    "meshExport": "Mesh export",
+    "scadExport": "SCAD export",
+    "downloadOff": "Download OFF",
+    "offLabel": "OFF (Object File Format)",
+    "stlBinary": "STL (binary)",
+    "threeMfShort": "3MF (Multimaterial)",
+    "editMaterials": "Edit materials"
+  },
+  "help": {
+    "menuTitle": "Help & licenses"
+  },
+  "scadDialogs": {
+    "downloadTitle": "Download SCAD",
+    "downloadBody": "Saves the current editor source. Enable optimization to run it through the backend for FreeCAD-friendly formatting (requires the API backend).",
+    "optimizeCheckbox": "Optimize for FreeCAD",
+    "exportTitle": "Export for FreeCAD",
+    "exportBody": "Runs the current script through the backend and downloads FreeCAD-friendly SCAD (requires the API backend).",
+    "freecadInfo": "FreeCAD's OpenSCAD workbench imports plain `.scad` files. This export adds a compatibility header and normalizes text for smoother import. For mesh-based workflows, use STL or STEP from a mesher after validating the model in OpenSCAD.",
+    "freecadBackendNote": "Requires a running backend (proxied at `/api/v1` in development).",
+    "downloadOptimizedScad": "Download optimized SCAD"
+  }
+}

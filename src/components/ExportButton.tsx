@@ -1,4 +1,5 @@
 import React, { useContext, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ModelContext } from './contexts.ts';
 import {
   Box,
@@ -40,6 +41,7 @@ function defaultScadDownloadName(activePath: string): string {
 export default function ExportButton({ className, style }: { className?: string; style?: React.CSSProperties }) {
   const model = useContext(ModelContext);
   if (!model) throw new Error('No model');
+  const { t } = useTranslation();
   const state = model.state;
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -56,15 +58,15 @@ export default function ExportButton({ className, style }: { className?: string;
   const scadMenuItems: ExportMenuItem[] = [
     {
       data: 'scad',
-      buttonLabel: 'Download SCAD',
-      label: 'SCAD (OpenSCAD source)',
+      buttonLabel: t('export.downloadScad'),
+      label: t('export.scadSource'),
       icon: <CodeIcon fontSize="small" />,
       disabled: !hasSource,
       command: () => setScadDownloadOpen(true),
     },
     {
       data: 'freecad_scad',
-      label: 'Export for FreeCAD…',
+      label: t('export.freecad'),
       icon: <HandymanIcon fontSize="small" />,
       disabled: !hasSource,
       command: () => setFreecadExportOpen(true),
@@ -75,16 +77,16 @@ export default function ExportButton({ className, style }: { className?: string;
     ? [
         {
           data: 'svg',
-          buttonLabel: 'SVG',
-          label: 'SVG (Simple Vector Graphics)',
+          buttonLabel: t('export.svg'),
+          label: t('export.svgLabel'),
           icon: <DownloadIcon fontSize="small" />,
           disabled: meshExportDisabled,
           command: () => model!.setFormats('svg', undefined),
         },
         {
           data: 'dxf',
-          buttonLabel: 'DXF',
-          label: 'DXF (Drawing Exchange Format)',
+          buttonLabel: t('export.dxf'),
+          label: t('export.dxfLabel'),
           icon: <DownloadIcon fontSize="small" />,
           disabled: meshExportDisabled,
           command: () => model!.setFormats('dxf', undefined),
@@ -95,32 +97,32 @@ export default function ExportButton({ className, style }: { className?: string;
     : [
         {
           data: 'glb',
-          buttonLabel: 'Download GLB',
-          label: 'GLB (binary glTF)',
+          buttonLabel: t('export.downloadGlb'),
+          label: t('export.glbLabel'),
           icon: <InsertDriveFileIcon fontSize="small" />,
           disabled: meshExportDisabled,
           command: () => model!.setFormats(undefined, 'glb'),
         },
         {
           data: 'stl',
-          buttonLabel: 'Download STL',
-          label: 'STL (binary)',
+          buttonLabel: t('export.downloadStl'),
+          label: t('export.stlBinary'),
           icon: <InsertDriveFileIcon fontSize="small" />,
           disabled: meshExportDisabled,
           command: () => model!.setFormats(undefined, 'stl'),
         },
         {
           data: 'off',
-          buttonLabel: 'Download OFF',
-          label: 'OFF (Object File Format)',
+          buttonLabel: t('export.downloadOff'),
+          label: t('export.offLabel'),
           icon: <InsertDriveFileIcon fontSize="small" />,
           disabled: meshExportDisabled,
           command: () => model!.setFormats(undefined, 'off'),
         },
         {
           data: '3mf',
-          buttonLabel: 'Download 3MF',
-          label: '3MF (Multimaterial)',
+          buttonLabel: t('export.download3mf'),
+          label: t('export.threeMfShort'),
           icon: <InsertDriveFileIcon fontSize="small" />,
           disabled: meshExportDisabled,
           command: () => model!.setFormats(undefined, '3mf'),
@@ -130,7 +132,7 @@ export default function ExportButton({ className, style }: { className?: string;
         { separator: true, icon: null },
         {
           label:
-            'Edit materials' +
+            t('export.editMaterials') +
             ((state.params.extruderColors ?? []).length > 0
               ? ` (${(state.params.extruderColors ?? []).length})`
               : ''),

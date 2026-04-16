@@ -1,6 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import { CSSProperties, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { IconButton, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import GitHubIcon from '@mui/icons-material/GitHub';
@@ -48,12 +49,13 @@ const helpLinks: HelpLink[] = [
 ];
 
 export default function HelpMenu({className, style}: {className?: string, style?: CSSProperties}) {
+  const { t } = useTranslation();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   return (
     <>
       <IconButton
-        title="Help & Licenses"
+        title={t('help.menuTitle')}
         style={style}
         className={className}
         onClick={(e) => setAnchorEl(e.currentTarget)}

@@ -17,13 +17,17 @@ import {
   MenuItem,
 } from '@mui/material';
 import SettingsIcon from '@mui/icons-material/Settings';
+import LanguageIcon from '@mui/icons-material/Language';
 import ViewColumnIcon from '@mui/icons-material/ViewColumn';
 import ThreeDRotationIcon from '@mui/icons-material/ThreeDRotation';
 import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LightModeIcon from '@mui/icons-material/LightMode';
+import { useTranslation } from 'react-i18next';
 import { ModelContext, ThemeModeContext } from './contexts.ts';
+import { setUiLocale } from '../i18n/init';
+import { LOCALE_LABELS, SUPPORTED_LOCALES, type AppLocale } from '../i18n/locales';
 import { isInStandaloneMode } from '../utils.ts';
 
 export default function SettingsMenu({className, style}: {className?: string, style?: CSSProperties}) {
@@ -31,6 +35,7 @@ export default function SettingsMenu({className, style}: {className?: string, st
   if (!model) throw new Error('No model');
   const state = model.state;
   const { mode, toggleMode } = useContext(ThemeModeContext);
+  const { t, i18n } = useTranslation();
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -40,7 +45,7 @@ export default function SettingsMenu({className, style}: {className?: string, st
   return (
     <>
       <IconButton
-        title="Settings menu"
+        title={t('settingsMenu.title')}
         style={style}
         className={className}
         onClick={(e) => setAnchorEl(e.currentTarget)}
@@ -60,8 +65,8 @@ export default function SettingsMenu({className, style}: {className?: string, st
           <ListItemIcon><ViewColumnIcon fontSize="small" /></ListItemIcon>
           <ListItemText>
             {state.view.layout.mode === 'multi'
-              ? 'Switch to single panel mode'
-              : 'Switch to side-by-side mode'}
+              ? t('settingsMenu.layoutMulti')
+              : t('settingsMenu.layoutSingle')}
           </ListItemText>
         </MenuItem>
 
@@ -72,7 +77,7 @@ export default function SettingsMenu({className, style}: {className?: string, st
           model.mutate(s => s.view.showAxes = !s.view.showAxes);
         }}>
           <ListItemIcon><ThreeDRotationIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>{state.view.showAxes ? 'Hide axes' : 'Show axes'}</ListItemText>
+          <ListItemText>{state.view.showAxes ? t('settingsMenu.axesHide') : t('settingsMenu.axesShow')}</ListItemText>
         </MenuItem>
 
         <MenuItem onClick={() => {
@@ -80,7 +85,7 @@ export default function SettingsMenu({className, style}: {className?: string, st
           model.mutate(s => s.view.lineNumbers = !s.view.lineNumbers);
         }}>
           <ListItemIcon><FormatListNumberedIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>{state.view.lineNumbers ? 'Hide line numbers' : 'Show line numbers'}</ListItemText>
+          <ListItemText>{state.view.lineNumbers ? t('settingsMenu.lineNumbersHide') : t('settingsMenu.lineNumbersShow')}</ListItemText>
         </MenuItem>
 
         <Divider />
@@ -92,8 +97,32 @@ export default function SettingsMenu({className, style}: {className?: string, st
           <ListItemIcon>
             {mode === 'light' ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
           </ListItemIcon>
-          <ListItemText>{mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}</ListItemText>
+          <ListItemText>{mode === 'light' ? t('settingsMenu.themeDark') : t('settingsMenu.themeLight')}</ListItemText>
         </MenuItem>
+
+        <Divider />
+
+        <MenuItem disabled sx={{ opacity: 0.85, py: 0.5, minHeight: 0 }}>
+          <ListItemIcon sx={{ minWidth: 32 }}>
+            <LanguageIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText primaryTypographyProps={{ variant: 'caption', fontWeight: 600 }}>
+            {t('settingsMenu.language')}
+          </ListItemText>
+        </MenuItem>
+        {SUPPORTED_LOCALES.map((loc: AppLocale) => (
+          <MenuItem
+            key={loc}
+            dense
+            selected={i18n.resolvedLanguage === loc}
+            onClick={() => {
+              setUiLocale(loc);
+              handleMenuClose();
+            }}
+          >
+            <ListItemText inset>{LOCALE_LABELS[loc]}</ListItemText>
+          </MenuItem>
+        ))}
 
         {isInStandaloneMode() && [
           <Divider key="div-clear" />,
@@ -102,22 +131,20 @@ export default function SettingsMenu({className, style}: {className?: string, st
             setConfirmOpen(true);
           }}>
             <ListItemIcon><DeleteForeverIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>Clear local storage</ListItemText>
+            <ListItemText>{t('settingsMenu.clearStorage')}</ListItemText>
           </MenuItem>,
         ]}
       </Menu>
 
       <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)}>
-        <DialogTitle>Clear local storage</DialogTitle>
+        <DialogTitle>{t('settingsMenu.clearTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            This will clear all the edits you've made and files you've created in this playground
-            and will reset it to factory defaults.
-            Are you sure you wish to proceed? (you might lose your models!)
+            {t('settingsMenu.clearBody')}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={() => setConfirmOpen(false)}>{t('common.cancel')}</Button>
           <Button
             color="error"
             variant="contained"
@@ -126,7 +153,7 @@ export default function SettingsMenu({className, style}: {className?: string, st
               location.reload();
             }}
           >
-            Clear all files!
+            {t('settingsMenu.clearConfirm')}
           </Button>
         </DialogActions>
       </Dialog>

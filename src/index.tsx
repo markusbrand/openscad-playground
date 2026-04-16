@@ -30,6 +30,9 @@ declare var BrowserFS: BrowserFSInterface
 window.addEventListener('load', async () => {
   registerCustomAppHeightCSSProperty();
 
+  const { initI18n } = await import('./i18n/init');
+  await initI18n();
+
   const fs = await createEditorFS({prefix: '/libraries/', allowPersistence: isInStandaloneMode()});
 
   await registerOpenSCADLanguage(fs, '/', zipArchives);

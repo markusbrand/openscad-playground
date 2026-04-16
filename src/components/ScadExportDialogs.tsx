@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Button,
@@ -32,6 +33,7 @@ export interface ScadDownloadDialogProps {
 
 /** Download current source; optionally optimize via backend for FreeCAD. */
 export function ScadDownloadDialog({ open, onClose, source, defaultFilename }: ScadDownloadDialogProps) {
+  const { t } = useTranslation();
   const [optimizeForFreecad, setOptimizeForFreecad] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,7 +69,7 @@ export function ScadDownloadDialog({ open, onClose, source, defaultFilename }: S
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Download SCAD</DialogTitle>
+      <DialogTitle>{t('scadDialogs.downloadTitle')}</DialogTitle>
       <DialogContent>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -75,8 +77,7 @@ export function ScadDownloadDialog({ open, onClose, source, defaultFilename }: S
           </Alert>
         )}
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Saves the current editor source. Enable optimization to run it through the backend for FreeCAD-friendly
-          formatting (requires the API backend).
+          {t('scadDialogs.downloadBody')}
         </Typography>
         <FormControlLabel
           control={
@@ -86,15 +87,15 @@ export function ScadDownloadDialog({ open, onClose, source, defaultFilename }: S
               disabled={loading}
             />
           }
-          label="Optimize for FreeCAD"
+          label={t('scadDialogs.optimizeCheckbox')}
         />
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={loading}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button onClick={handleDownload} variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={18} /> : null}>
-          Download
+          {t('common.download')}
         </Button>
       </DialogActions>
     </Dialog>
@@ -109,6 +110,7 @@ export interface FreeCadExportDialogProps {
 
 /** Export SCAD optimized for FreeCAD via POST /api/v1/export/scad. */
 export function FreeCadExportDialog({ open, onClose, source }: FreeCadExportDialogProps) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,7 +139,7 @@ export function FreeCadExportDialog({ open, onClose, source }: FreeCadExportDial
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Export for FreeCAD</DialogTitle>
+      <DialogTitle>{t('scadDialogs.exportTitle')}</DialogTitle>
       <DialogContent>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -145,20 +147,18 @@ export function FreeCadExportDialog({ open, onClose, source }: FreeCadExportDial
           </Alert>
         )}
         <Alert severity="info" sx={{ mb: 2 }}>
-          FreeCAD&apos;s OpenSCAD workbench imports plain <code>.scad</code> files. This export adds a compatibility
-          header and normalizes text for smoother import. For mesh-based workflows, use STL or STEP from a mesher
-          after validating the model in OpenSCAD.
+          {t('scadDialogs.freecadInfo')}
         </Alert>
         <Typography variant="body2" color="text.secondary">
-          Requires a running backend (proxied at <code>/api/v1</code> in development).
+          {t('scadDialogs.freecadBackendNote')}
         </Typography>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={loading}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button onClick={handleExport} variant="contained" disabled={loading} startIcon={loading ? <CircularProgress size={18} /> : null}>
-          Download optimized SCAD
+          {t('scadDialogs.downloadOptimizedScad')}
         </Button>
       </DialogActions>
     </Dialog>

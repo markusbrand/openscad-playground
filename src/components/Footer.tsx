@@ -1,6 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import React, { CSSProperties, useContext } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ModelContext } from './contexts.ts';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { Box, Button, Chip, LinearProgress } from '@mui/material';
@@ -15,6 +16,7 @@ import MultimaterialColorsDialog from './MultimaterialColorsDialog.tsx';
 export default function Footer({style}: {style?: CSSProperties}) {
   const model = useContext(ModelContext);
   if (!model) throw new Error('No model');
+  const { t } = useTranslation();
   const state = model.state;
 
   const severityByMarkerSeverity = new Map<monaco.MarkerSeverity, 'error' | 'warning' | 'info'>([
@@ -67,7 +69,7 @@ export default function Footer({style}: {style?: CSSProperties}) {
             size="small"
             variant="outlined"
           >
-            Previewing...
+            {t('footer.previewing')}
           </Button>
         ) : state.output && state.output.isPreview ? (
             <Button
@@ -77,7 +79,7 @@ export default function Footer({style}: {style?: CSSProperties}) {
               variant="outlined"
               disabled={state.rendering}
             >
-              {state.rendering ? 'Rendering...' : 'Render'}
+              {state.rendering ? t('footer.rendering') : t('footer.render')}
             </Button>
         ) : undefined
       }

@@ -1,6 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import React, { useContext } from 'react';
+import React, { useContext, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { SingleLayoutComponentId } from '../state/app-state.ts'
 import { Tabs, Tab, ToggleButtonGroup, ToggleButton, Box } from '@mui/material';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
@@ -20,22 +21,29 @@ export default function PanelSwitcher() {
   const model = useContext(ModelContext);
   if (!model) throw new Error('No model');
 
+  const { t } = useTranslation();
   const state = model.state;
   const activeView = state.view.activeView ?? 'chat';
 
-  const singleTargets: {id: SingleLayoutComponentId, label: string}[] = [
-    { id: 'chat', label: 'Chat' },
-    { id: 'editor', label: 'Code' },
-    { id: 'viewer', label: 'View' },
-  ];
-  if ((state.parameterSet?.parameters?.length ?? 0) > 0) {
-    singleTargets.push({ id: 'customizer', label: 'Customize' });
-  }
+  const singleTargets: { id: SingleLayoutComponentId; label: string }[] = useMemo(() => {
+    const rows: { id: SingleLayoutComponentId; label: string }[] = [
+      { id: 'chat', label: t('panel.chat') },
+      { id: 'editor', label: t('panel.code') },
+      { id: 'viewer', label: t('panel.view') },
+    ];
+    if ((state.parameterSet?.parameters?.length ?? 0) > 0) {
+      rows.push({ id: 'customizer', label: t('panel.customize') });
+    }
+    return rows;
+  }, [t, state.parameterSet?.parameters?.length]);
 
-  const multiTargets: {id: string, label: string}[] = [
-    { id: 'chat', label: 'Chat' },
-    { id: 'editor', label: 'Code' },
-  ];
+  const multiTargets: { id: string; label: string }[] = useMemo(
+    () => [
+      { id: 'chat', label: t('panel.chat') },
+      { id: 'editor', label: t('panel.code') },
+    ],
+    [t],
+  );
 
   const handleMultiViewToggle = (id: string) => {
     if (id === 'chat' || id === 'editor') {

@@ -1,0 +1,150 @@
+{
+  "api": {
+    "backendSetupHint": "Backend mit `npm run dev:backend` starten. `BACKEND_PORT` in `.env` muss zum Vite-Proxy passen; nach Port-Änderung `npm run dev` neu starten.",
+    "detailPrefix": " Details: {{body}}",
+    "resources": {
+      "models": "Modellliste",
+      "chatStream": "Chat-Stream",
+      "autodebug": "Auto-Debug",
+      "apiKeys": "API-Schlüssel",
+      "apiKeysSave": "API-Schlüssel speichern",
+      "apiKeysDelete": "API-Schlüssel löschen",
+      "health": "Health-Check",
+      "scadExport": "SCAD-Export"
+    },
+    "errors": {
+      "noConnection": "Keine Verbindung zum Backend. {{hint}}",
+      "badGateway": "{{resource}}: Backend nicht erreichbar oder Proxy-Fehler (HTTP {{status}} {{statusText}}).{{detail}} {{hint}}",
+      "forbidden": "{{resource}}: Zugriff verweigert (HTTP {{status}}).{{detail}}",
+      "server": "{{resource}}: Serverfehler (HTTP {{status}}).{{detail}} Bitte Backend-Terminal-Log prüfen.",
+      "notFound": "{{resource}}: API-Endpunkt nicht gefunden (HTTP 404).{{detail}}",
+      "generic": "{{resource}}: Anfrage fehlgeschlagen (HTTP {{status}}).{{detail}}",
+      "emptyStreamBody": "Chat-Stream: leere Antwort vom Server (kein Response-Body)."
+    }
+  },
+  "common": {
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "download": "Herunterladen"
+  },
+  "chat": {
+    "emptyHint": "Bitte OpenSCAD-Code erzeugen lassen oder das gewünschte 3D-Modell beschreiben.",
+    "placeholder": "3D-Modell beschreiben…",
+    "tooltipAttach": "Dateien anhängen (.stl, .scad, .png, .jpg)",
+    "tooltipStop": "Generierung stoppen",
+    "tooltipSend": "Nachricht senden (Enter)",
+    "tooltipAutodebug": "Auto-Debug für aktuelle Fehler",
+    "tooltipSettings": "API-Schlüssel-Einstellungen",
+    "tooltipNewSketch": "Neue Skizze von vorne beginnen",
+    "generating": "Antwort wird erzeugt…",
+    "newSketchTitle": "Neue Skizze",
+    "newSketchBody": "Dadurch werden der Editor und der gesamte Chat geleert. Das aktuelle Modell und die Unterhaltung gehen verloren. Fortfahren?",
+    "newSketchConfirm": "Löschen & neu starten",
+    "codeAppliedShort": "OpenSCAD-Code wurde in den Editor übernommen. Zum Ansehen oder Bearbeiten den Tab „Code“ öffnen.",
+    "noResponseText": "(Keine Antwort)",
+    "unknownError": "Unbekannter Fehler beim Chat.",
+    "loadModelsFallback": "Modellliste konnte nicht geladen werden.",
+    "noStderr": "Im aktuellen Build-Log sind keine Fehler (stderr) vorhanden.",
+    "autodebugFailed": "Auto-Debug fehlgeschlagen.",
+    "autodebugRetriesFailed": "❌ Auto-Debug nach mehreren Versuchen fehlgeschlagen.\n\nFehler:\n{{detail}}",
+    "noDiagnostic": "(kein Diagnose-Text)",
+    "successCompile": "✅ Modell erfolgreich kompiliert und gerendert.",
+    "cancelled": "(abgebrochen)",
+    "errorPrefix": "**Fehler:** {{message}}",
+    "editorPayloadReminder": "\n\n(App-Integration: Genau einen ```openscad-Codeblock mit dem vollständigen, ausführbaren Skript einfügen, sonst wird der Editor nicht aktualisiert. Nur-Prosa-Antworten werden nicht übernommen.)",
+    "autodebugResult": "**Auto-Debug** (Konfidenz: {{confidence}})\n\n{{explanation}}\n\n(Korrigierter Code wurde in den Editor übernommen.)"
+  },
+  "footer": {
+    "previewing": "Vorschau…",
+    "rendering": "Rendern…",
+    "render": "Rendern"
+  },
+  "panel": {
+    "chat": "Chat",
+    "code": "Code",
+    "view": "Ansicht",
+    "customize": "Anpassen"
+  },
+  "settingsMenu": {
+    "title": "Einstellungsmenü",
+    "layoutMulti": "Auf Einzelfenster umschalten",
+    "layoutSingle": "Auf nebeneinander umschalten",
+    "axesHide": "Achsen ausblenden",
+    "axesShow": "Achsen einblenden",
+    "lineNumbersHide": "Zeilennummern ausblenden",
+    "lineNumbersShow": "Zeilennummern einblenden",
+    "themeDark": "Dunkles Design",
+    "themeLight": "Helles Design",
+    "language": "Sprache",
+    "clearStorage": "Lokalen Speicher leeren",
+    "clearTitle": "Lokalen Speicher leeren",
+    "clearBody": "Alle Änderungen und selbst erstellten Dateien in dieser Playground-Instanz werden gelöscht und auf Werkseinstellungen zurückgesetzt. Wirklich fortfahren? (Modelle können verloren gehen!)",
+    "clearConfirm": "Alles löschen!"
+  },
+  "settingsDialog": {
+    "title": "API-Schlüssel",
+    "configured": "Konfiguriert",
+    "notConfigured": "Nicht konfiguriert",
+    "currentKey": "Aktueller Schlüssel:",
+    "apiKey": "API-Schlüssel",
+    "endpointUrl": "Endpunkt-URL",
+    "saveFailed": "Speichern fehlgeschlagen.",
+    "deleteFailed": "Löschen fehlgeschlagen.",
+    "loadKeysFailed": "API-Schlüssel-Status konnte nicht geladen werden.",
+    "close": "Schließen",
+    "save": "Speichern",
+    "saving": "Speichern…",
+    "remove": "Entfernen"
+  },
+  "editor": {
+    "menuTitle": "Editor-Menü",
+    "newProject": "Neues Projekt",
+    "shareProject": "Projekt teilen",
+    "newFile": "Neue Datei",
+    "copyToNew": "In neue Datei kopieren",
+    "uploadFiles": "Datei(en) hochladen",
+    "downloadSources": "Quellen herunterladen",
+    "selectAll": "Alles auswählen",
+    "find": "Suchen",
+    "backTo": "Zurück zu {{path}}",
+    "renderAction": "OpenSCAD rendern",
+    "previewAction": "OpenSCAD-Vorschau",
+    "saveDisabled": "Speichern (deaktiviert)",
+    "saveProject": "OpenSCAD-Projekt speichern"
+  },
+  "export": {
+    "downloadScad": "SCAD herunterladen",
+    "scadSource": "SCAD (OpenSCAD-Quelltext)",
+    "freecad": "Für FreeCAD exportieren…",
+    "downloadGlb": "GLB herunterladen",
+    "glbLabel": "GLB (binäres glTF)",
+    "download3mf": "3MF herunterladen",
+    "threeMfLabel": "3MF (3D Manufacturing Format)",
+    "downloadStl": "STL herunterladen",
+    "stlLabel": "STL (Stereolithografie)",
+    "svg": "SVG",
+    "svgLabel": "SVG (Vektorgrafik)",
+    "dxf": "DXF",
+    "dxfLabel": "DXF (Drawing Exchange Format)",
+    "meshExport": "Mesh-Export",
+    "scadExport": "SCAD-Export",
+    "downloadOff": "OFF herunterladen",
+    "offLabel": "OFF (Object File Format)",
+    "stlBinary": "STL (binär)",
+    "threeMfShort": "3MF (Multimaterial)",
+    "editMaterials": "Materialien bearbeiten"
+  },
+  "help": {
+    "menuTitle": "Hilfe & Lizenzen"
+  },
+  "scadDialogs": {
+    "downloadTitle": "SCAD herunterladen",
+    "downloadBody": "Speichert den aktuellen Editor-Inhalt. Optimierung schickt den Code durchs Backend in ein FreeCAD-freundliches Format (benötigt laufendes API-Backend).",
+    "optimizeCheckbox": "Für FreeCAD optimieren",
+    "exportTitle": "Export für FreeCAD",
+    "exportBody": "Sendet das aktuelle Skript ans Backend und lädt FreeCAD-freundliches SCAD herunter (benötigt laufendes API-Backend).",
+    "freecadInfo": "Die OpenSCAD-Workbench von FreeCAD importiert einfache `.scad`-Dateien. Dieser Export ergänzt einen Kompatibilitäts-Header und normalisiert den Text für einen ruhigeren Import. Für Mesh-Workflows STL oder STEP nach Validierung in OpenSCAD verwenden.",
+    "freecadBackendNote": "Benötigt ein laufendes Backend (in der Entwicklung per Proxy unter `/api/v1`).",
+    "downloadOptimizedScad": "Optimiertes SCAD herunterladen"
+  }
+}

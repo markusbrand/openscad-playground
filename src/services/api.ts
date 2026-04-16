@@ -1,8 +1,66 @@
 import debug from 'debug';
+import i18n from 'i18next';
 
 const log = debug('app:api');
 
 const API_BASE = '/api/v1';
+
+const MAX_ERROR_BODY_CHARS = 280;
+
+function squishErrorBody(text: string): string {
+  const s = text.replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  return s.length > MAX_ERROR_BODY_CHARS ? `${s.slice(0, MAX_ERROR_BODY_CHARS)}…` : s;
+}
+
+async function readErrorBody(response: Response): Promise<string> {
+  return squishErrorBody(await response.text().catch(() => ''));
+}
+
+function formatDetail(body: string): string {
+  return body ? i18n.t('api.detailPrefix', { body }) : '';
+}
+
+/**
+ * `fetch` wrapper: turns connection failures into a clear message (browser often only says "Failed to fetch").
+ */
+async function fetchApi(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw e;
+    }
+    const hint = i18n.t('api.backendSetupHint');
+    throw new Error(i18n.t('api.errors.noConnection', { hint }));
+  }
+}
+
+/** Throws `Error` with a translated message for the UI. `resourceKey` e.g. `api.resources.models`. */
+async function throwUnlessOk(response: Response, resourceKey: string): Promise<void> {
+  if (response.ok) return;
+  const body = await readErrorBody(response);
+  const resource = i18n.t(resourceKey);
+  const hint = i18n.t('api.backendSetupHint');
+  const detail = formatDetail(body);
+  const { status, statusText } = response;
+
+  if (status === 502 || status === 503 || status === 504) {
+    throw new Error(
+      i18n.t('api.errors.badGateway', { resource, status, statusText, detail, hint }),
+    );
+  }
+  if (status === 401 || status === 403) {
+    throw new Error(i18n.t('api.errors.forbidden', { resource, status, detail }));
+  }
+  if (status >= 500) {
+    throw new Error(i18n.t('api.errors.server', { resource, status, detail }));
+  }
+  if (status === 404) {
+    throw new Error(i18n.t('api.errors.notFound', { resource, detail }));
+  }
+  throw new Error(i18n.t('api.errors.generic', { resource, status, detail }));
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
@@ -60,20 +118,19 @@ export async function* streamChat(
   files?: UploadedFile[],
   signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
-  const response = await fetch(`${API_BASE}/chat/stream`, {
+  const response = await fetchApi(`${API_BASE}/chat/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, model, files }),
     signal,
   });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Chat failed: ${response.status} - ${error}`);
-  }
+  await throwUnlessOk(response, 'api.resources.chatStream');
 
   const reader = response.body?.getReader();
-  if (!reader) throw new Error('No response body');
+  if (!reader) {
+    throw new Error(i18n.t('api.errors.emptyStreamBody'));
+  }
 
   const decoder = new TextDecoder();
   let buffer = '';
@@ -100,50 +157,47 @@ export async function* streamChat(
 }
 
 export async function autodebug(req: AutodebugRequest): Promise<AutodebugResponse> {
-  const response = await fetch(`${API_BASE}/chat/autodebug`, {
+  const response = await fetchApi(`${API_BASE}/chat/autodebug`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
   });
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Autodebug failed: ${response.status} - ${error}`);
-  }
+  await throwUnlessOk(response, 'api.resources.autodebug');
   return response.json();
 }
 
 export async function getModels(): Promise<ModelInfo[]> {
-  const response = await fetch(`${API_BASE}/models`);
-  if (!response.ok) throw new Error(`Failed to fetch models: ${response.status}`);
+  const response = await fetchApi(`${API_BASE}/models`);
+  await throwUnlessOk(response, 'api.resources.models');
   return response.json();
 }
 
 export async function getApiKeys(): Promise<ApiKeyInfo[]> {
-  const response = await fetch(`${API_BASE}/config/api-keys`);
-  if (!response.ok) throw new Error(`Failed to fetch API keys: ${response.status}`);
+  const response = await fetchApi(`${API_BASE}/config/api-keys`);
+  await throwUnlessOk(response, 'api.resources.apiKeys');
   const data = await response.json();
   return data.providers;
 }
 
 export async function setApiKey(provider: string, apiKey: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/config/api-keys`, {
+  const response = await fetchApi(`${API_BASE}/config/api-keys`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ provider, api_key: apiKey }),
   });
-  if (!response.ok) throw new Error(`Failed to set API key: ${response.status}`);
+  await throwUnlessOk(response, 'api.resources.apiKeysSave');
 }
 
 export async function deleteApiKey(provider: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/config/api-keys/${provider}`, {
+  const response = await fetchApi(`${API_BASE}/config/api-keys/${provider}`, {
     method: 'DELETE',
   });
-  if (!response.ok) throw new Error(`Failed to delete API key: ${response.status}`);
+  await throwUnlessOk(response, 'api.resources.apiKeysDelete');
 }
 
 export async function healthCheck(): Promise<{ status: string; version: string }> {
-  const response = await fetch(`${API_BASE}/health`);
-  if (!response.ok) throw new Error('Backend not available');
+  const response = await fetchApi(`${API_BASE}/health`);
+  await throwUnlessOk(response, 'api.resources.health');
   return response.json();
 }
 
@@ -158,15 +212,14 @@ export interface ExportScadResponse {
 }
 
 export async function exportScad(req: ExportScadRequest): Promise<ExportScadResponse> {
-  const response = await fetch(`${API_BASE}/export/scad`, {
+  const response = await fetchApi(`${API_BASE}/export/scad`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),
   });
   if (!response.ok) {
-    const error = await response.text();
-    log('export/scad failed: %s %s', response.status, error);
-    throw new Error(`SCAD export failed: ${response.status} – ${error}`);
+    log('export/scad failed: HTTP %s', response.status);
   }
+  await throwUnlessOk(response, 'api.resources.scadExport');
   return response.json();
 }

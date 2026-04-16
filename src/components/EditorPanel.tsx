@@ -1,6 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import React, { CSSProperties, useContext, useEffect, useState } from 'react';
+import React, { CSSProperties, useContext, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Editor, { loader, Monaco } from '@monaco-editor/react';
 import openscadEditorOptions from '../language/openscad-editor-options.ts';
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
@@ -37,6 +38,7 @@ export default function EditorPanel({className, style}: {className?: string, sty
   const model = useContext(ModelContext);
   if (!model) throw new Error('No model');
 
+  const { t } = useTranslation();
   const state = model.state;
   const layout = state.view.layout;
   const activeView = state.view.activeView ?? 'chat';
@@ -64,77 +66,91 @@ export default function EditorPanel({className, style}: {className?: string, sty
     }
   }
 
-  const onMount = (editor: monaco.editor.IStandaloneCodeEditor) => {
-    editor.addAction({
-      id: "openscad-render",
-      label: "Render OpenSCAD",
-      run: () => model.render({isPreview: false, now: true})
-    });
-    editor.addAction({
-      id: "openscad-preview",
-      label: "Preview OpenSCAD",
-      run: () => model.render({isPreview: true, now: true})
-    });
-    editor.addAction({
-      id: "openscad-save-do-nothing",
-      label: "Save (disabled)",
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
-      run: () => {}
-    });
-    editor.addAction({
-      id: "openscad-save-project",
-      label: "Save OpenSCAD project",
-      keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyS],
-      run: () => model.saveProject()
-    });
-    setEditor(editor)
-  }
+  const onMount = (ed: monaco.editor.IStandaloneCodeEditor) => {
+    setEditor(ed);
+  };
 
-  const menuItems = [
-    {
-      label: "New project",
-      icon: <AddCircleOutlineIcon fontSize="small" />,
-      onClick: () => window.open(buildUrlForStateParams(getBlankProjectState()), '_blank'),
-    },
-    {
-      label: 'Share project',
-      icon: <ShareIcon fontSize="small" />,
-      disabled: true,
-    },
-    { divider: true },
-    {
-      label: "New file",
-      icon: <NoteAddIcon fontSize="small" />,
-      disabled: true,
-    },
-    {
-      label: "Copy to new file",
-      icon: <ContentCopyIcon fontSize="small" />,
-      disabled: true,
-    },
-    {
-      label: "Upload file(s)",
-      icon: <UploadIcon fontSize="small" />,
-      disabled: true,
-    },
-    {
-      label: 'Download sources',
-      icon: <DownloadIcon fontSize="small" />,
-      disabled: true,
-    },
-    { divider: true },
-    {
-      label: 'Select All',
-      icon: <SelectAllIcon fontSize="small" />,
-      onClick: () => editor?.trigger(state.params.activePath, 'editor.action.selectAll', null),
-    },
-    { divider: true },
-    {
-      label: 'Find',
-      icon: <SearchIcon fontSize="small" />,
-      onClick: () => editor?.trigger(state.params.activePath, 'actions.find', null),
-    },
-  ];
+  useEffect(() => {
+    if (!isMonacoSupported || !editor) return;
+    const disposers = [
+      editor.addAction({
+        id: 'openscad-render',
+        label: t('editor.renderAction'),
+        run: () => model.render({ isPreview: false, now: true }),
+      }),
+      editor.addAction({
+        id: 'openscad-preview',
+        label: t('editor.previewAction'),
+        run: () => model.render({ isPreview: true, now: true }),
+      }),
+      editor.addAction({
+        id: 'openscad-save-do-nothing',
+        label: t('editor.saveDisabled'),
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
+        run: () => {},
+      }),
+      editor.addAction({
+        id: 'openscad-save-project',
+        label: t('editor.saveProject'),
+        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyS],
+        run: () => model.saveProject(),
+      }),
+    ];
+    return () => {
+      for (const d of disposers) {
+        d.dispose();
+      }
+    };
+  }, [editor, model, t]);
+
+  const menuItems = useMemo(
+    () => [
+      {
+        label: t('editor.newProject'),
+        icon: <AddCircleOutlineIcon fontSize="small" />,
+        onClick: () => window.open(buildUrlForStateParams(getBlankProjectState()), '_blank'),
+      },
+      {
+        label: t('editor.shareProject'),
+        icon: <ShareIcon fontSize="small" />,
+        disabled: true,
+      },
+      { divider: true },
+      {
+        label: t('editor.newFile'),
+        icon: <NoteAddIcon fontSize="small" />,
+        disabled: true,
+      },
+      {
+        label: t('editor.copyToNew'),
+        icon: <ContentCopyIcon fontSize="small" />,
+        disabled: true,
+      },
+      {
+        label: t('editor.uploadFiles'),
+        icon: <UploadIcon fontSize="small" />,
+        disabled: true,
+      },
+      {
+        label: t('editor.downloadSources'),
+        icon: <DownloadIcon fontSize="small" />,
+        disabled: true,
+      },
+      { divider: true },
+      {
+        label: t('editor.selectAll'),
+        icon: <SelectAllIcon fontSize="small" />,
+        onClick: () => editor?.trigger(state.params.activePath, 'editor.action.selectAll', null),
+      },
+      { divider: true },
+      {
+        label: t('editor.find'),
+        icon: <SearchIcon fontSize="small" />,
+        onClick: () => editor?.trigger(state.params.activePath, 'actions.find', null),
+      },
+    ],
+    [t, editor, state.params.activePath],
+  );
 
   return (
     <div className={`editor-panel ${className ?? ''}`} style={{
@@ -145,7 +161,7 @@ export default function EditorPanel({className, style}: {className?: string, sty
       <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, m: '5px', alignItems: 'center' }}>
           
         <IconButton
-          title="Editor menu"
+          title={t('editor.menuTitle')}
           onClick={(e) => setMenuAnchor(e.currentTarget)}
         >
           <MoreHorizIcon />
@@ -179,7 +195,7 @@ export default function EditorPanel({className, style}: {className?: string, sty
         {state.params.activePath !== defaultSourcePath && 
           <IconButton
             onClick={() => model.openFile(defaultSourcePath)} 
-            title={`Go back to ${defaultSourcePath}`}
+            title={t('editor.backTo', { path: defaultSourcePath })}
           >
             <ChevronLeftIcon />
           </IconButton>

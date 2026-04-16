@@ -21,6 +21,7 @@ import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import debug from 'debug';
+import { useTranslation } from 'react-i18next';
 import { ApiKeyInfo, getApiKeys, setApiKey, deleteApiKey } from '../services/api';
 
 const log = debug('app:settings');
@@ -81,6 +82,7 @@ interface ProviderTabProps {
 }
 
 function ProviderTab({ provider, keyInfo, onSave, onDelete }: ProviderTabProps) {
+  const { t } = useTranslation();
   const [apiKeyValue, setApiKeyValue] = useState('');
   const [endpointValue, setEndpointValue] = useState('http://localhost:11434');
   const [showKey, setShowKey] = useState(false);
@@ -100,7 +102,7 @@ function ProviderTab({ provider, keyInfo, onSave, onDelete }: ProviderTabProps) 
       setApiKeyValue('');
     } catch (err) {
       log('Failed to save API key for %s: %O', provider.id, err);
-      setError(err instanceof Error ? err.message : 'Failed to save');
+      setError(err instanceof Error ? err.message : t('settingsDialog.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -113,7 +115,7 @@ function ProviderTab({ provider, keyInfo, onSave, onDelete }: ProviderTabProps) 
       await onDelete(provider.id);
     } catch (err) {
       log('Failed to delete API key for %s: %O', provider.id, err);
-      setError(err instanceof Error ? err.message : 'Failed to delete');
+      setError(err instanceof Error ? err.message : t('settingsDialog.deleteFailed'));
     } finally {
       setSaving(false);
     }
@@ -127,7 +129,7 @@ function ProviderTab({ provider, keyInfo, onSave, onDelete }: ProviderTabProps) 
         </Typography>
         <Chip
           icon={configured ? <CheckCircleIcon /> : <CancelIcon />}
-          label={configured ? 'Configured' : 'Not configured'}
+          label={configured ? t('settingsDialog.configured') : t('settingsDialog.notConfigured')}
           color={configured ? 'success' : 'default'}
           size="small"
           variant="outlined"
@@ -136,13 +138,13 @@ function ProviderTab({ provider, keyInfo, onSave, onDelete }: ProviderTabProps) 
 
       {configured && keyInfo?.masked_key && (
         <Typography variant="body2" color="text.secondary">
-          Current key: {keyInfo.masked_key}
+          {t('settingsDialog.currentKey')} {keyInfo.masked_key}
         </Typography>
       )}
 
       {!provider.hasEndpoint ? (
         <TextField
-          label="API Key"
+          label={t('settingsDialog.apiKey')}
           type={showKey ? 'text' : 'password'}
           value={apiKeyValue}
           onChange={(e) => setApiKeyValue(e.target.value)}
@@ -167,7 +169,7 @@ function ProviderTab({ provider, keyInfo, onSave, onDelete }: ProviderTabProps) 
         />
       ) : (
         <TextField
-          label="Endpoint URL"
+          label={t('settingsDialog.endpointUrl')}
           value={endpointValue}
           onChange={(e) => setEndpointValue(e.target.value)}
           placeholder="http://localhost:11434"
@@ -185,7 +187,7 @@ function ProviderTab({ provider, keyInfo, onSave, onDelete }: ProviderTabProps) 
           disabled={saving || (!provider.hasEndpoint && !apiKeyValue.trim())}
           size="small"
         >
-          {saving ? 'Saving...' : 'Save'}
+          {saving ? t('settingsDialog.saving') : t('settingsDialog.save')}
         </Button>
         {configured && (
           <Button
@@ -195,7 +197,7 @@ function ProviderTab({ provider, keyInfo, onSave, onDelete }: ProviderTabProps) 
             disabled={saving}
             size="small"
           >
-            Remove
+            {t('settingsDialog.remove')}
           </Button>
         )}
       </Box>
@@ -213,6 +215,7 @@ interface SettingsDialogProps {
 }
 
 export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState(0);
   const [keyInfos, setKeyInfos] = useState<ApiKeyInfo[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -224,9 +227,11 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
       setLoadError(null);
     } catch (err) {
       log('Failed to load API keys: %O', err);
-      setLoadError('Could not load API key status. Is the backend running?');
+      setLoadError(
+        err instanceof Error ? err.message : t('settingsDialog.loadKeysFailed'),
+      );
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (open) {
@@ -246,7 +251,7 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>API Key Configuration</DialogTitle>
+      <DialogTitle>{t('settingsDialog.title')}</DialogTitle>
       <DialogContent>
         {loadError && (
           <Alert severity="warning" sx={{ mb: 2 }}>
@@ -296,7 +301,7 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
         ))}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={onClose}>{t('settingsDialog.close')}</Button>
       </DialogActions>
     </Dialog>
   );

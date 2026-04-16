@@ -1,4 +1,12 @@
-import React, { CSSProperties, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, {
+  CSSProperties,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   Avatar,
@@ -31,6 +39,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import BugReportIcon from '@mui/icons-material/BugReport';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import debug from 'debug';
+import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import { ModelContext } from './contexts';
 import {
@@ -160,10 +169,6 @@ function inferOpenScadCodeFromModelReply(full: string): string | undefined {
   return undefined;
 }
 
-/** Reminder appended only to the API payload (not shown in the chat bubble). */
-const EDITOR_APPLY_REMINDER =
-  '\n\n(App integration: you must include exactly one ```openscad fenced block with the complete runnable script, or the editor will not update. Prose-only answers are not applied.)';
-
 function MessageContent({ text }: { text: string }) {
   const prose = stripMarkdownCodeBlocks(text);
   if (!prose) return null;
@@ -178,6 +183,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
   const model = useContext(ModelContext);
   if (!model) throw new Error('No model');
 
+  const { t } = useTranslation();
   const theme = useTheme();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -196,9 +202,28 @@ export default function ChatPanel({ className, style }: { className?: string; st
   const [autodebugRunning, setAutodebugRunning] = useState(false);
   const [newSketchDialogOpen, setNewSketchDialogOpen] = useState(false);
 
+  const loadModels = useCallback(async () => {
+    try {
+      const models = await getModels();
+      setAvailableModels(models);
+      setSelectedModel(prev => {
+        const first = models[0];
+        if (first && !models.find(m => m.id === prev)) {
+          return first.id;
+        }
+        return prev;
+      });
+    } catch (err) {
+      log('Failed to load models: %O', err);
+      const msg = err instanceof Error ? err.message : t('chat.loadModelsFallback');
+      setError(msg);
+      console.error('[ChatPanel] getModels failed:', err);
+    }
+  }, [t]);
+
   useEffect(() => {
-    loadModels();
-  }, []);
+    void loadModels();
+  }, [loadModels]);
 
   /** Keep the message list pinned to the latest entry (runs after layout so scrollHeight is correct). */
   useLayoutEffect(() => {
@@ -211,23 +236,6 @@ export default function ChatPanel({ className, style }: { className?: string; st
     const raf = requestAnimationFrame(scrollToBottom);
     return () => cancelAnimationFrame(raf);
   }, [messages, error]);
-
-  const loadModels = async () => {
-    try {
-      const models = await getModels();
-      setAvailableModels(models);
-      if (models.length > 0 && !models.find(m => m.id === selectedModel)) {
-        setSelectedModel(models[0].id);
-      }
-    } catch (err) {
-      log('Failed to load models: %O', err);
-      const msg = err instanceof Error ? err.message : 'Failed to load models';
-      setError(
-        `${msg}. Is the API running (uvicorn / python dev.py) and is the Vite dev proxy pointing at the same BACKEND_PORT?`,
-      );
-      console.error('[ChatPanel] getModels failed:', err);
-    }
-  };
 
   const applyCodeToEditor = useCallback((code: string) => {
     model.source = code;
@@ -271,12 +279,13 @@ export default function ChatPanel({ className, style }: { className?: string; st
       ? `[EXISTING_OPENSCAD_CODE]\n${existingCode}\n[/EXISTING_OPENSCAD_CODE]\n\n`
       : '';
 
+    const editorReminder = t('chat.editorPayloadReminder');
     const apiMessages: ApiChatMessage[] = [
       ...messages.map(m => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
       })),
-      { role: 'user' as const, content: contextPrefix + trimmed + EDITOR_APPLY_REMINDER },
+      { role: 'user' as const, content: contextPrefix + trimmed + editorReminder },
     ];
 
     const abortController = new AbortController();
@@ -335,10 +344,10 @@ export default function ChatPanel({ className, style }: { className?: string; st
         displayText = norm(displayText).replace(norm(codeToApply), '');
         displayText = stripMarkdownCodeBlocks(displayText).trim();
         if (!displayText || displayText.length < 8) {
-          displayText = 'OpenSCAD code was applied to the editor. Open the Code tab when you want to view or edit it.';
+          displayText = t('chat.codeAppliedShort');
         }
       } else {
-        displayText = displayText.trim() || fullContent.trim() || '(No response text)';
+        displayText = displayText.trim() || fullContent.trim() || t('chat.noResponseText');
       }
 
       setMessages(prev => prev.map(m =>
@@ -365,12 +374,10 @@ export default function ChatPanel({ className, style }: { className?: string; st
         );
 
         if (result.success) {
-          addSystemMessage('\u{2705} Model compiled and rendered successfully.');
+          addSystemMessage(t('chat.successCompile'));
         } else {
-          const detail = (result.error ?? '').trim() || '(no diagnostic text)';
-          addSystemMessage(
-            `\u{274C} Auto-debug failed after retries.\n\nError:\n${detail}`,
-          );
+          const detail = (result.error ?? '').trim() || t('chat.noDiagnostic');
+          addSystemMessage(t('chat.autodebugRetriesFailed', { detail }));
         }
       }
 
@@ -379,17 +386,17 @@ export default function ChatPanel({ className, style }: { className?: string; st
       if (abortController.signal.aborted) {
         setMessages(prev => prev.map(m =>
           m.id === assistantMessage.id
-            ? { ...m, isStreaming: false, content: m.content || '(cancelled)' }
+            ? { ...m, isStreaming: false, content: m.content || t('chat.cancelled') }
             : m
         ));
       } else {
         log('Chat error: %O', err);
-        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        const errorMsg = err instanceof Error ? err.message : t('chat.unknownError');
         console.error('[ChatPanel] stream failed:', err);
         setError(errorMsg);
         setMessages(prev => prev.map(m =>
           m.id === assistantMessage.id
-            ? { ...m, isStreaming: false, content: `**Error:** ${errorMsg}` }
+            ? { ...m, isStreaming: false, content: t('chat.errorPrefix', { message: errorMsg }) }
             : m
         ));
       }
@@ -451,7 +458,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
       .join('\n');
 
     if (!errors.trim()) {
-      setError('No errors found in the current build log.');
+      setError(t('chat.noStderr'));
       return;
     }
 
@@ -469,7 +476,10 @@ export default function ChatPanel({ className, style }: { className?: string; st
       const msg: ChatMessage = {
         id: uuidv4(),
         role: 'assistant',
-        content: `**Auto-debug** (confidence: ${result.confidence})\n\n${result.explanation}\n\n(Fixed code was applied to the editor.)`,
+        content: t('chat.autodebugResult', {
+          confidence: result.confidence,
+          explanation: result.explanation,
+        }),
         code: result.fixed_code,
         timestamp: new Date(),
       };
@@ -477,7 +487,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
       applyCodeToEditor(result.fixed_code);
     } catch (err) {
       log('Autodebug error: %O', err);
-      setError(err instanceof Error ? err.message : 'Autodebug failed');
+      setError(err instanceof Error ? err.message : t('chat.autodebugFailed'));
     } finally {
       setAutodebugRunning(false);
     }
@@ -526,7 +536,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
           ))}
         </Select>
 
-        <Tooltip title="Auto-debug current errors">
+        <Tooltip title={t('chat.tooltipAutodebug')}>
           <span>
             <IconButton
               onClick={handleAutodebug}
@@ -539,13 +549,13 @@ export default function ChatPanel({ className, style }: { className?: string; st
           </span>
         </Tooltip>
 
-        <Tooltip title="API key settings">
+        <Tooltip title={t('chat.tooltipSettings')}>
           <IconButton onClick={() => setSettingsOpen(true)} size="small">
             <SettingsIcon />
           </IconButton>
         </Tooltip>
 
-        <Tooltip title="Start a new sketch from scratch">
+        <Tooltip title={t('chat.tooltipNewSketch')}>
           <IconButton
             onClick={() => setNewSketchDialogOpen(true)}
             disabled={isStreaming}
@@ -584,7 +594,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
           }}>
             <SmartToyIcon sx={{ fontSize: 48 }} />
             <Typography variant="body2" textAlign="center">
-              Ask me to generate OpenSCAD code, or describe the 3D model you want to create.
+              {t('chat.emptyHint')}
             </Typography>
           </Box>
         )}
@@ -651,7 +661,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
                     <CircularProgress size={12} />
                     <Typography variant="caption" color="text.secondary">
-                      Generating response…
+                      {t('chat.generating')}
                     </Typography>
                   </Box>
                 )}
@@ -707,7 +717,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
           onChange={handleFileUpload}
         />
 
-        <Tooltip title="Attach files (.stl, .scad, .png, .jpg)">
+        <Tooltip title={t('chat.tooltipAttach')}>
           <IconButton
             onClick={() => fileInputRef.current?.click()}
             disabled={isStreaming}
@@ -721,7 +731,7 @@ export default function ChatPanel({ className, style }: { className?: string; st
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Describe your 3D model..."
+          placeholder={t('chat.placeholder')}
           multiline
           maxRows={6}
           fullWidth
@@ -731,13 +741,13 @@ export default function ChatPanel({ className, style }: { className?: string; st
         />
 
         {isStreaming ? (
-          <Tooltip title="Stop generation">
+          <Tooltip title={t('chat.tooltipStop')}>
             <IconButton onClick={handleStop} color="error" size="small">
               <StopIcon />
             </IconButton>
           </Tooltip>
         ) : (
-          <Tooltip title="Send message (Enter)">
+          <Tooltip title={t('chat.tooltipSend')}>
             <span>
               <IconButton
                 onClick={handleSend}
@@ -758,17 +768,16 @@ export default function ChatPanel({ className, style }: { className?: string; st
         open={newSketchDialogOpen}
         onClose={() => setNewSketchDialogOpen(false)}
       >
-        <DialogTitle>New Sketch</DialogTitle>
+        <DialogTitle>{t('chat.newSketchTitle')}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            This will clear the editor and the entire chat history. You will lose
-            the current model and conversation. Continue?
+            {t('chat.newSketchBody')}
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setNewSketchDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => setNewSketchDialogOpen(false)}>{t('common.cancel')}</Button>
           <Button onClick={handleNewSketch} color="error" variant="contained">
-            Delete &amp; Start Fresh
+            {t('chat.newSketchConfirm')}
           </Button>
         </DialogActions>
       </Dialog>
