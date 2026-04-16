@@ -50,7 +50,8 @@ export default defineConfig(({ mode }) => {
         /** `virtual:pwa-register` in `src/index.tsx` — do not inject a second registration script. */
         injectRegister: false,
         manifest: webManifest,
-        manifestFilename: 'manifest.webmanifest',
+        // Same basename as `public/manifest.json` so dev (PWA off) still serves a valid manifest.
+        manifestFilename: 'manifest.json',
         includeAssets: ['favicon.ico', 'logo192.png', 'logo512.png'],
         workbox: {
           maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
