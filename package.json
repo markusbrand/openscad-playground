@@ -29,6 +29,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:restart": "bash scripts/dev-restart.sh",
     "dev:backend": "cd backend && .venv/bin/python dev.py",
     "build": "vite build",
     "preview": "vite preview",
