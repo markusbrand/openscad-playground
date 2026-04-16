@@ -27,7 +27,6 @@ export function spawnOpenSCAD(
   streamsCallback: (ps: ProcessStreams) => void
 ): AbortablePromise<OpenSCADInvocationResults> {
   let worker: Worker | null;
-  let rejection: (err: any) => void;
 
   function terminate() {
     if (!worker) {
@@ -38,11 +37,17 @@ export function spawnOpenSCAD(
   }
     
   return AbortablePromise<OpenSCADInvocationResults>((resolve: (result: OpenSCADInvocationResults) => void, reject: (error: any) => void) => {
+    let settled = false;
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      fn();
+    };
+
     worker = new Worker(new URL('./openscad-worker.ts', import.meta.url), { type: 'module' });
-    rejection = reject;
     worker.onmessage = (e: MessageEvent<OpenSCADInvocationCallback>) => {
       if ('result' in e.data) {
-        resolve(e.data.result);
+        settle(() => resolve(e.data.result));
         terminate();
       } else {
         streamsCallback(e.data);
@@ -52,6 +57,7 @@ export function spawnOpenSCAD(
     
     return () => {
       terminate();
+      settle(() => reject(Object.assign(new Error('OpenSCAD worker terminated before completion'), { name: 'AbortError' })));
     };
   });
 }

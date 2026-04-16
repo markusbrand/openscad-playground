@@ -6,6 +6,8 @@ declare interface FS {
   readdirSync(path: string): string[];
   symlink(target: string, source: string): void;
   readFileSync(path: string): BufferSource;
+  /** Emscripten FILESYSTEM uses synchronous `readFile` instead of Node-style `readFileSync`. */
+  readFile?(path: string, opts?: { encoding?: string }): BufferSource | string;
   lstatSync(path: string): {isDirectory(): boolean};
 }
 

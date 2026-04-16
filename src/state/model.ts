@@ -4,7 +4,7 @@ import { checkSyntax, render, RenderArgs, RenderOutput } from "../runner/actions
 import { MultiLayoutComponentId, SingleLayoutComponentId, State, StatePersister } from "./app-state.ts";
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { bubbleUpDeepMutations } from "./deep-mutate.ts";
-import { downloadUrl, fetchSource, formatBytes, formatMillis, readFileAsDataURL } from '../utils.ts'
+import { downloadUrl, fetchSource, formatBytes, formatMillis, isSupersededExecution, readFileAsDataURL } from '../utils.ts'
 
 import JSZip from 'jszip';
 import { ProcessStreams } from "../runner/openscad-runner.ts";
@@ -60,7 +60,19 @@ function augmentDiagnosticsForAutodebug(code: string, diagnostics: string): stri
   return chunks.filter(Boolean).join('\n');
 }
 
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError';
+}
+
 export class Model {
+  /** Monotonic id so stale `render()` / `checkSyntax()` completions do not clear UI flags for a newer run. */
+  private renderSeq = 0;
+  private checkSyntaxSeq = 0;
+
+  /** Batched OpenSCAD stdout/stderr so each worker line does not trigger a React update. */
+  private pendingRunLogs: [string, string][] = [];
+  private runLogFlushRaf: number | null = null;
+
   constructor(private fs: FS, public state: State, private setStateCallback?: (state: State) => void, 
     private statePersister?: StatePersister) {
   }
@@ -256,6 +268,7 @@ export class Model {
   }
 
   async checkSyntax() {
+    const seq = ++this.checkSyntaxSeq;
     this.mutate(s => s.checkingSyntax = true);
     try {
       const checkerRun = await checkSyntax({
@@ -263,22 +276,65 @@ export class Model {
         sources: this.state.params.sources,
       })({now: false});
       this.mutate(s => {
+        if (seq !== this.checkSyntaxSeq) return;
         s.lastCheckerRun = checkerRun;
         s.parameterSet = checkerRun?.parameterSet;
-        s.checkingSyntax = false;
       });
     } catch (err) {
-      console.error('Error while checking syntax:', err)
+      if (!isSupersededExecution(err) && !isAbortError(err)) {
+        console.error('Error while checking syntax:', err);
+      }
+    } finally {
+      this.mutate(s => {
+        if (seq !== this.checkSyntaxSeq) return;
+        s.checkingSyntax = false;
+      });
     }
   }
 
-  rawStreamsCallback(ps: ProcessStreams) {
+  /** Drop buffered worker lines (e.g. superseded render) and cancel a pending rAF flush. */
+  private discardPendingRunLogs() {
+    if (this.runLogFlushRaf != null) {
+      cancelAnimationFrame(this.runLogFlushRaf);
+      this.runLogFlushRaf = null;
+    }
+    this.pendingRunLogs = [];
+  }
+
+  private cancelRunLogRafOnly() {
+    if (this.runLogFlushRaf != null) {
+      cancelAnimationFrame(this.runLogFlushRaf);
+      this.runLogFlushRaf = null;
+    }
+  }
+
+  /** Apply any buffered stdout/stderr immediately (before mutating render output). */
+  private flushRunLogsNow() {
+    this.cancelRunLogRafOnly();
+    const chunk = this.pendingRunLogs.splice(0);
+    if (chunk.length === 0) return;
     this.mutate(s => {
-      if ('stdout' in ps) {
-        s.currentRunLogs?.push(['stdout', ps.stdout]);
-      } else {
-        s.currentRunLogs?.push(['stderr', ps.stderr]);
+      s.currentRunLogs ??= [];
+      for (const row of chunk) {
+        s.currentRunLogs.push(row);
       }
+    });
+  }
+
+  rawStreamsCallback(ps: ProcessStreams) {
+    const row: [string, string] = 'stdout' in ps ? ['stdout', ps.stdout] : ['stderr', ps.stderr];
+    this.pendingRunLogs.push(row);
+    if (this.runLogFlushRaf != null) return;
+    this.runLogFlushRaf = requestAnimationFrame(() => {
+      this.runLogFlushRaf = null;
+      const chunk = this.pendingRunLogs.splice(0);
+      if (chunk.length === 0) return;
+      this.mutate(s => {
+        s.currentRunLogs ??= [];
+        for (const r of chunk) {
+          s.currentRunLogs.push(r);
+        }
+      });
     });
   }
 
@@ -489,6 +545,8 @@ export class Model {
 
   async render({isPreview, mountArchives, now, retryInOtherDim}: {isPreview: boolean, mountArchives?: boolean, now: boolean, retryInOtherDim?: boolean}) {
     // console.log(JSON.stringify(this.state, null, 2));
+    const seq = ++this.renderSeq;
+    this.discardPendingRunLogs();
     mountArchives ??= true;
     retryInOtherDim ??= true;
     const setRendering = (s: State, value: boolean) => {
@@ -575,7 +633,9 @@ export class Model {
       }
       const outFileURL = URL.createObjectURL(output.outFile);
       const displayFileURL = displayFile && await readFileAsDataURL(displayFile);
+      this.flushRunLogsNow();
       this.mutate(s => {
+        if (seq !== this.renderSeq) return;
         setRendering(s, false);
         s.error = undefined;
         s.is2D = is2D;
@@ -607,9 +667,14 @@ export class Model {
         }
       });
     } catch (err) {
+      this.flushRunLogsNow();
       this.mutate(s => {
+        if (seq !== this.renderSeq) return;
         setRendering(s, false);
-        console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err)
+        if (isSupersededExecution(err) || isAbortError(err)) {
+          return;
+        }
+        console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err);
         s.error = `${err}`;
       });
     }

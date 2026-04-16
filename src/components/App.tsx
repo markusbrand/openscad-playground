@@ -1,6 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import React, { CSSProperties, useEffect, useMemo, useState } from 'react';
+import React, { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { ThemeProvider, createTheme, CssBaseline, useMediaQuery, Box } from '@mui/material';
 import { MultiLayoutComponentId, State, StatePersister } from '../state/app-state'
 import { Model } from '../state/model';
@@ -43,20 +43,30 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
     toggleMode: () => setThemeMode(prev => prev === 'light' ? 'dark' : 'light'),
   }), [themeMode]);
 
-  const model = new Model(fs, state, setState, statePersister);
-  useEffect(() => model.init());
+  const modelRef = useRef<Model | null>(null);
+  if (modelRef.current === null) {
+    modelRef.current = new Model(fs, initialState, setState, statePersister);
+  }
+  const model = modelRef.current;
+  model.state = state;
+
+  useEffect(() => {
+    modelRef.current?.init();
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      const m = modelRef.current;
+      if (!m) return;
       if (event.key === 'F5') {
         event.preventDefault();
-        model.render({isPreview: true, now: true})
+        m.render({ isPreview: true, now: true });
       } else if (event.key === 'F6') {
         event.preventDefault();
-        model.render({isPreview: false, now: true})
+        m.render({ isPreview: false, now: true });
       } else if (event.key === 'F7') {
         event.preventDefault();
-        model.export();
+        void m.export();
       }
     };
     window.addEventListener('keydown', handleKeyDown);

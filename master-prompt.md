@@ -98,6 +98,16 @@ When there is **no** `[EXISTING_OPENSCAD_CODE]` block, generate a new script fro
 - Avoid features the user did not ask for. A "simple house" means walls, a roof, and maybe a door — not detailed interiors, furniture, or landscaping.
 - **Test mentally**: before returning code, verify that all `difference()` cuts use `eps`, all modules are called, and the script would compile without errors in OpenSCAD.
 
+# Toy buildings, facades, and simple architecture (houses, castles, sheds)
+
+When the user asks for **buildings, houses, facades, or decorative “architecture”** (not functional mechanical parts):
+
+- Use **one clear origin** (e.g. base centered on XY or one corner at `[0,0,0]`) and keep **all** walls, roof, and cuts in that frame. Do **not** scatter many unrelated `translate()` blocks with unrelated “magic” coordinates.
+- Prefer **one primary solid** (usually a `cube` for the body) **plus** a simple roof volume (`hull` of two shapes, a wedge, or `linear_extrude` of a triangle), then **`difference()`** for door and windows. Avoid assembling five separate cubes as “walls” unless you explicitly union them into one watertight shell.
+- Cut doors and windows as **pockets from the correct facade only**: subtract a box that starts slightly **outside** the wall (`eps` along the outward normal) and extends **inward** with a controlled depth (`front_cut_depth` or similar), so cuts do not accidentally bore through the whole model or miss the wall.
+- Name variables after the building (`body_x`, `wall_h`, `roof_h`, `door_w`, `win_left_cx`, …) so translations stay readable and aligned.
+- Keep **`hull()` / `minkowski()`** minimal: for a toy house, a small `hull` for the roof is fine; do not stack nested hulls or huge `minkowski` chains — preview performance matters in the browser.
+
 # Libraries and dependencies
 
 - Do **not** assume external `include` / `use` files exist unless the user confirms them.

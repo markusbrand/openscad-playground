@@ -2,6 +2,12 @@
 
 import { Source } from "./state/app-state.ts";
 
+/** BrowserFS in the app (readFileSync) or Emscripten FS in the OpenSCAD worker (readFile). */
+export type SourceReadFs = {
+  readFileSync?: (path: string) => BufferSource;
+  readFile?: (path: string, opts?: { encoding?: string }) => BufferSource | string;
+};
+
 export function mapObject(o: any, f: (key: string, value: any) => any, ifPred: (key: string) => boolean) {
   const ret = [];
   for (const key of Object.keys(o)) {
@@ -24,12 +30,25 @@ export function AbortablePromise<T>(f: (resolve: (result: T) => void, reject: (e
   return Object.assign(promise, {kill: kill!});
 }
 
+/** Thrown when a newer debounced call replaced this one (see `turnIntoDelayableExecution`). */
+export function isSupersededExecution(err: unknown): boolean {
+  return err instanceof Error && err.name === 'SupersededError';
+}
+
+function supersededError(): Error {
+  const e = new Error('Superseded by a newer debounced run');
+  e.name = 'SupersededError';
+  return e;
+}
+
 // <T extends any[]>(...args: T)
 export function turnIntoDelayableExecution<T extends any[], R>(
     delay: number,
     job: (...args: T) => AbortablePromise<R>) {
-  let pendingId: number | null;
-  let runningJobKillSignal: (() => void) | null;
+  let pendingId: number | null = null;
+  let runningJobKillSignal: (() => void) | null = null;
+  /** Reject function for the promise currently waiting on `setTimeout` (not yet running `job`). */
+  let pendingScheduledReject: ((reason?: unknown) => void) | null = null;
   // return AbortablePromise<SyntaxCheckOutput>((res, rej) => {
   //   (async () => {
   //     try {
@@ -67,8 +86,22 @@ export function turnIntoDelayableExecution<T extends any[], R>(
   //return (...args: T) => async ({now, callback}: {now: boolean, callback: (result?: R, error?: any) => void}) => {
   return (...args: T) => ({now}: {now: boolean}) => AbortablePromise<R>((resolve, reject) => {
     let abortablePromise: AbortablePromise<R> | undefined = undefined;
+
+    const cancelScheduledWait = () => {
+      if (pendingId != null) {
+        clearTimeout(pendingId);
+        pendingId = null;
+      }
+      if (pendingScheduledReject != null) {
+        pendingScheduledReject(supersededError());
+        pendingScheduledReject = null;
+      }
+    };
+
     (async () => {
       const doExecute = async () => {
+        pendingId = null;
+        pendingScheduledReject = null;
         if (runningJobKillSignal) {
           runningJobKillSignal();
           runningJobKillSignal = null;
@@ -82,15 +115,17 @@ export function turnIntoDelayableExecution<T extends any[], R>(
         } finally {
           runningJobKillSignal = null;
         }
-      }
-      if (pendingId) {
-        clearTimeout(pendingId);
-        pendingId = null;
-      }
+      };
+
+      cancelScheduledWait();
+
       if (now) {
-        doExecute();
+        void doExecute();
       } else {
-        pendingId = window.setTimeout(doExecute, delay);
+        pendingScheduledReject = reject;
+        pendingId = window.setTimeout(() => {
+          void doExecute();
+        }, delay);
       }
     })();
     return () => abortablePromise?.kill();
@@ -151,7 +186,7 @@ export function downloadUrl(url: string, filename: string) {
   link.parentNode?.removeChild(link);
 }
 
-export async function fetchSource(fs: FS, {content, path, url}: Source): Promise<Uint8Array> {
+export async function fetchSource(fs: SourceReadFs, {content, path, url}: Source): Promise<Uint8Array> {
   const isText = path.endsWith('.scad') || path.endsWith('.json');
   if (content) {
     return new TextEncoder().encode(content);
@@ -167,7 +202,18 @@ export async function fetchSource(fs: FS, {content, path, url}: Source): Promise
       return data;
     }
   } else if (path) {
-    const data = fs.readFileSync(path);
+    // Main thread: BrowserFS exposes readFileSync. OpenSCAD WASM worker: Emscripten FS uses readFile.
+    let data: BufferSource | string;
+    if (typeof fs.readFileSync === 'function') {
+      data = fs.readFileSync(path);
+    } else if (typeof fs.readFile === 'function') {
+      data = fs.readFile(path);
+    } else {
+      throw new Error(`fetchSource: cannot read "${path}": fs has neither readFileSync nor readFile`);
+    }
+    if (typeof data === 'string') {
+      return new TextEncoder().encode(data.replace(/\r\n/g, '\n'));
+    }
     return new Uint8Array('buffer' in data ? data.buffer : data);
   } else {
     throw new Error('Invalid source: ' + JSON.stringify({path, content, url}));
