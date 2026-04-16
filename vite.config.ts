@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { VitePWA } from 'vite-plugin-pwa';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 function parsePort(value: string | undefined, fallback: number): number {
@@ -24,6 +26,10 @@ export default defineConfig(({ mode }) => {
     },
   } as const;
 
+  const webManifest = JSON.parse(
+    readFileSync(path.join(rootDir, 'public/manifest.json'), 'utf-8'),
+  ) as Record<string, unknown>;
+
   return {
     plugins: [
       react(),
@@ -38,6 +44,50 @@ export default defineConfig(({ mode }) => {
             dest: '.',
           },
         ],
+      }),
+      VitePWA({
+        registerType: 'prompt',
+        /** `virtual:pwa-register` in `src/index.tsx` — do not inject a second registration script. */
+        injectRegister: false,
+        manifest: webManifest,
+        manifestFilename: 'manifest.webmanifest',
+        includeAssets: ['favicon.ico', 'logo192.png', 'logo512.png'],
+        workbox: {
+          maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,woff,webmanifest}'],
+          globIgnores: ['**/*.map'],
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/api\//, /\.zip$/i],
+          runtimeCaching: [
+            {
+              urlPattern: /^https?:\/\/[^/]+\/openscad\.wasm$/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'openscad-wasm',
+                expiration: { maxEntries: 2, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              },
+            },
+            {
+              urlPattern: /^https?:\/\/[^/]+\/openscad-worker.*\.js$/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'openscad-worker',
+                expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              },
+            },
+            {
+              urlPattern: /^https?:\/\/[^/]+\/libraries\/.*\.zip$/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'library-zips',
+                expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              },
+            },
+          ],
+        },
+        devOptions: {
+          enabled: false,
+        },
       }),
     ],
     root: '.',

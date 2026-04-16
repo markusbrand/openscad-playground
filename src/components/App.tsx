@@ -11,6 +11,7 @@ import Footer from './Footer';
 import { ModelContext, FSContext, ThemeModeContext, ThemeMode } from './contexts';
 import PanelSwitcher from './PanelSwitcher';
 import CustomizerPanel from './CustomizerPanel';
+import PwaUpdateSnackbar from './PwaUpdateSnackbar';
 
 
 export function App({initialState, statePersister, fs}: {initialState: State, statePersister: StatePersister, fs: FS}) {
@@ -119,6 +120,7 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <PwaUpdateSnackbar />
       <ThemeModeContext.Provider value={themeModeContextValue}>
         <ModelContext.Provider value={model}>
           <FSContext.Provider value={fs}>

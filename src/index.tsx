@@ -28,9 +28,6 @@ declare var BrowserFS: BrowserFSInterface
 
 
 window.addEventListener('load', async () => {
-  // Vite production builds do not emit ./sw.js (legacy Workbox lived in webpack.libs only).
-  // Registering a missing script yields HTML from the SPA fallback and breaks the console (E2E).
-
   registerCustomAppHeightCSSProperty();
 
   const fs = await createEditorFS({prefix: '/libraries/', allowPersistence: isInStandaloneMode()});

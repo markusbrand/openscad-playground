@@ -5,10 +5,14 @@
   "type": "module",
   "homepage": "https://ochafik.com/openscad2/",
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
     "@gltf-transform/core": "^4.1.1",
     "@gltf-transform/extensions": "^4.1.1",
     "@monaco-editor/loader": "^1.4.0",
     "@monaco-editor/react": "^4.6.0",
+    "@mui/icons-material": "^6.4.0",
+    "@mui/material": "^6.4.0",
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
@@ -16,10 +20,6 @@
     "chroma-js": "^3.1.2",
     "debug": "^4.4.0",
     "jszip": "^3.10.1",
-    "@emotion/react": "^11.14.0",
-    "@emotion/styled": "^11.14.0",
-    "@mui/icons-material": "^6.4.0",
-    "@mui/material": "^6.4.0",
     "monaco-editor": "^0.52.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -64,7 +64,6 @@
     "node": ">=18.12.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.0",
     "@types/chroma-js": "^2.4.5",
     "@types/debug": "^4.1.12",
     "@types/filesystem": "^0.0.36",
@@ -74,6 +73,7 @@
     "@types/react-dom": "^18.3.5",
     "@types/uzip": "^0.20201231.2",
     "@types/web": "^0.0.140",
+    "@vitejs/plugin-react": "^4.3.0",
     "copy-webpack-plugin": "^12.0.2",
     "cross-env": "^7.0.3",
     "css-loader": "^7.1.2",
@@ -87,11 +87,12 @@
     "ts-loader": "^9.5.1",
     "tslib": "^2.8.1",
     "typescript": "^5.9.2",
+    "vite": "^6.0.0",
+    "vite-plugin-pwa": "^1.2.0",
+    "vite-plugin-static-copy": "^2.2.0",
     "webpack": "^5.97.1",
     "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.0",
-    "vite": "^6.0.0",
-    "vite-plugin-static-copy": "^2.2.0",
     "workbox-webpack-plugin": "^7.3.0"
   }
 }
