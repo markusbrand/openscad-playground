@@ -17,6 +17,13 @@ export default defineConfig(({ mode }) => {
   const frontendDevPort = parsePort(env.FRONTEND_DEV_PORT, 5173);
   const backendPort = parsePort(env.BACKEND_PORT, 8000);
 
+  const apiProxy = {
+    '/api/v1': {
+      target: `http://127.0.0.1:${backendPort}`,
+      changeOrigin: true,
+    },
+  } as const;
+
   return {
     plugins: [
       react(),
@@ -41,12 +48,7 @@ export default defineConfig(({ mode }) => {
         'Cross-Origin-Opener-Policy': 'same-origin',
         'Cross-Origin-Embedder-Policy': 'require-corp',
       },
-      proxy: {
-        '/api/v1': {
-          target: `http://127.0.0.1:${backendPort}`,
-          changeOrigin: true,
-        },
-      },
+      proxy: apiProxy,
     },
     resolve: {
       alias: {
@@ -66,6 +68,8 @@ export default defineConfig(({ mode }) => {
         'Cross-Origin-Opener-Policy': 'same-origin',
         'Cross-Origin-Embedder-Policy': 'require-corp',
       },
+      // Same-origin `/api/v1` during `vite preview` (e.g. NODE_ENV=production e2e).
+      proxy: apiProxy,
     },
     worker: {
       format: 'es',
