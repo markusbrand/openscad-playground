@@ -40,6 +40,11 @@ _LITELLM_API_KEY_ENV: dict[str, str] = {
     "mistral": "MISTRAL_API_KEY",
 }
 
+# Transient provider errors (503/429/…) often clear after backoff; tune here.
+_LLM_TRANSIENT_MAX_ATTEMPTS = 7
+_LLM_TRANSIENT_BACKOFF_INITIAL_SEC = 2.0
+_LLM_TRANSIENT_BACKOFF_MAX_SEC = 24.0
+
 
 class LLMService:
     """High-level wrapper around LiteLLM for chat streaming and auto-debug."""
@@ -76,8 +81,8 @@ class LLMService:
     ) -> AsyncGenerator[str, None]:
         """Yield SSE-formatted events for a streaming chat completion."""
         litellm_messages = self._build_messages(messages, model, files)
-        max_stream_attempts = 4
-        delay_sec = 1.5
+        max_stream_attempts = _LLM_TRANSIENT_MAX_ATTEMPTS
+        delay_sec = _LLM_TRANSIENT_BACKOFF_INITIAL_SEC
 
         for stream_attempt in range(max_stream_attempts):
             full_response = ""
@@ -125,7 +130,7 @@ class LLMService:
                         delay_sec,
                     )
                     await asyncio.sleep(delay_sec)
-                    delay_sec = min(delay_sec * 2, 8.0)
+                    delay_sec = min(delay_sec * 2, _LLM_TRANSIENT_BACKOFF_MAX_SEC)
                     continue
 
                 logger.exception("LLM streaming error for model=%s", model)
@@ -167,8 +172,8 @@ class LLMService:
             {"role": "user", "content": prompt},
         ]
 
-        max_attempts = 4
-        delay_sec = 1.5
+        max_attempts = _LLM_TRANSIENT_MAX_ATTEMPTS
+        delay_sec = _LLM_TRANSIENT_BACKOFF_INITIAL_SEC
         for call_attempt in range(max_attempts):
             try:
                 response = await litellm.acompletion(
@@ -199,7 +204,7 @@ class LLMService:
                         delay_sec,
                     )
                     await asyncio.sleep(delay_sec)
-                    delay_sec = min(delay_sec * 2, 8.0)
+                    delay_sec = min(delay_sec * 2, _LLM_TRANSIENT_BACKOFF_MAX_SEC)
                     continue
                 logger.exception("Auto-debug error for model=%s attempt=%d", model, attempt)
                 return {
@@ -370,8 +375,30 @@ class LLMService:
         return {"api_key": key}
 
     @staticmethod
-    def _is_transient_llm_error(exc: Exception) -> bool:
+    def _http_status_from_exception(exc: BaseException) -> int | None:
+        """Best-effort HTTP status from LiteLLM / httpx / OpenAI-style wrappers."""
+        code = getattr(exc, "status_code", None)
+        if isinstance(code, int):
+            return code
+        resp = getattr(exc, "response", None)
+        if resp is not None:
+            sc = getattr(resp, "status_code", None)
+            if isinstance(sc, int):
+                return sc
+        # Some clients nest the original error
+        cause = getattr(exc, "__cause__", None)
+        if isinstance(cause, BaseException):
+            nested = LLMService._http_status_from_exception(cause)
+            if nested is not None:
+                return nested
+        return None
+
+    @classmethod
+    def _is_transient_llm_error(cls, exc: Exception) -> bool:
         """True for provider overload / capacity errors that often succeed on retry."""
+        status = cls._http_status_from_exception(exc)
+        if status in (408, 429, 500, 502, 503, 504):
+            return True
         raw = str(exc).lower()
         return any(
             marker in raw
@@ -379,6 +406,8 @@ class LLMService:
                 "503",
                 "504",
                 "429",
+                "502",
+                "500",
                 "unavailable",
                 "resource_exhausted",
                 "high demand",
@@ -387,6 +416,12 @@ class LLMService:
                 "deadline exceeded",
                 "serviceunavailable",
                 "midstreamfallbackerror",
+                "rate limit",
+                "ratelimit",
+                "too many requests",
+                "temporar",
+                "capacity",
+                "throttl",
             )
         )
 
@@ -397,8 +432,9 @@ class LLMService:
         m = model.lower()
         if LLMService._is_transient_llm_error(exc):
             return (
-                "The model provider is temporarily overloaded or rate-limited (often HTTP 503). "
-                "That is usually short-lived. Wait a minute and send your message again, "
+                "The model provider stayed overloaded or rate-limited after automatic retries "
+                f"(up to {_LLM_TRANSIENT_MAX_ATTEMPTS} attempts with backoff). "
+                "Wait a few minutes and send your message again, "
                 "or choose another model in the dropdown (e.g. a different Gemini tier or OpenAI / Ollama)."
             )
         if m.startswith("gemini/") and (
