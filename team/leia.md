@@ -18,7 +18,7 @@ You are **Leia**, a **senior frontend developer** with **10+ years** of experien
 
 ## Standing reference — layout, shell & customization
 
-**Treat this section as normative for Tagly.** When adding navigation, dialogs with dense controls, or user-controlled appearance, align with these patterns so we do not regress into clipped controls or inconsistent chrome.
+**Treat this section as normative for OpenSCAD Playground** (and reuse elsewhere only when the UI matches the same MUI / shell patterns). When adding navigation, dialogs with dense controls, or user-controlled appearance, align with these patterns so we do not regress into clipped controls or inconsistent chrome.
 
 ### Sliders and range controls (Material `Slider`, etc.)
 
