@@ -15,20 +15,21 @@ type SyntaxCheckArgs = {
   sources: Source[],
 }
 type SyntaxCheckOutput = {logText: string, markers: monaco.editor.IMarkerData[], parameterSet?: ParameterSet};
+/** CLI define so preview matches in-browser F5-style runs without mutating user source. */
+const PREVIEW_DEFINE_ARG = '-D$preview=true';
+
 export const checkSyntax =
   turnIntoDelayableExecution(syntaxDelay, (sargs: SyntaxCheckArgs) => {
     const {
       activePath,
       sources,
     } = sargs;
-    
-    const content = '$preview=true;\n' + sources[0].content;
 
     const outFile = 'out.json';
     const job = spawnOpenSCAD({
       mountArchives: true,
       inputs: sources,
-      args: [activePath, "-o", outFile, "--export-format=param"],
+      args: [activePath, "-o", outFile, "--export-format=param", PREVIEW_DEFINE_ARG],
       outputPaths: [outFile],
     }, (streams) => {
       console.log(JSON.stringify(streams));
@@ -56,8 +57,8 @@ export const checkSyntax =
 
           res({
             ...processMergedOutputs(result.mergedOutputs, {shiftSourceLines: {
-              sourcePath: sources[0].path,
-              skipLines: 1,
+              sourcePath: activePath,
+              skipLines: 0,
             }}),
             parameterSet,
           });
@@ -112,18 +113,18 @@ export const render =
       streamsCallback,
     }  = renderArgs;
 
-    const prefixLines: string[] = [];
-    if (isPreview) {
-      // TODO: add render-modifiers feature to OpenSCAD.
-      prefixLines.push('$preview=true;');
-    }
     if (!scadPath.endsWith('.scad')) throw new Error('First source must be a .scad file, got ' + sources[0].path + ' instead');
     
     const source = sources.filter(s => s.path === scadPath)[0];
     if (!source) throw new Error('Active path not found in sources!');
 
     if (source.content == null) throw new Error('Source content is null!');
-    const content = [...prefixLines, source.content].join('\n');
+    const content = source.content;
+
+    const mergedVars: Record<string, unknown> = {
+      ...(vars ?? {}),
+      ...(isPreview ? { '$preview': true } : {}),
+    };
 
     const actualRenderFormat = renderFormat == 'glb' || renderFormat == '3mf' ? 'off' : renderFormat;
     const stem = scadPath.replace(/\.scad$/, '').split('/').pop();
@@ -133,7 +134,7 @@ export const render =
       "-o", outFile,
       "--backend=manifold",
       "--export-format=" + (actualRenderFormat == 'stl' ? 'binstl' : actualRenderFormat),
-      ...(Object.entries(vars ?? {}).flatMap(([k, v]) => [`-D${k}=${formatValue(v)}`])),
+      ...(Object.entries(mergedVars).flatMap(([k, v]) => [`-D${k}=${formatValue(v)}`])),
       ...(features ?? []).map(f => `--enable=${f}`),
       ...(extraArgs ?? [])
     ]
@@ -154,7 +155,7 @@ export const render =
           const {logText, markers} = processMergedOutputs(result.mergedOutputs, {
             shiftSourceLines: {
               sourcePath: source.path,
-              skipLines: prefixLines.length
+              skipLines: 0,
             }
           });
     
