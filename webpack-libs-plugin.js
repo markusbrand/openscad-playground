@@ -2,7 +2,8 @@
 
 import { exec, execFile } from 'node:child_process';
 import { createWriteStream, existsSync } from 'node:fs';
-import fs, { glob as fsGlob } from 'node:fs/promises';
+import fs from 'node:fs/promises';
+import { glob as fsGlob } from 'glob';
 import https from 'node:https';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
