@@ -26,6 +26,10 @@ pnpm-debug.log*
 # Tests / coverage
 coverage/
 .nyc_output/
+playwright-report/
+blob-report/
+test-results/
+playwright/.cache/
 
 # TypeScript incremental
 *.tsbuildinfo

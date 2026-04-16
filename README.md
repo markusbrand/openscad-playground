@@ -99,7 +99,7 @@ Models are proxied through LiteLLM; the UI loads the catalog from `GET /api/v1/m
 ## Contributing
 
 1. Fork the repository and create a branch for your change.
-2. Run frontend and backend locally (see [Quick start](#quick-start-development)); add or update tests where applicable (`backend`: pytest; frontend: see `package.json` scripts).
+2. Run frontend and backend locally (see [Quick start](#quick-start-development)); add or update tests where applicable (`backend`: pytest; browser E2E: **`npm run test:e2e`** with Playwright — see [docs/test-strategy.md](docs/test-strategy.md)).
 3. Keep commits focused; follow existing code style and logging patterns.
 4. Open a pull request with a clear description of behavior and any breaking API changes.
 

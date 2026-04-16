@@ -56,13 +56,13 @@ When a change is **major**—new or removed **`/api/v1`** surfaces, **CORS** / A
 
 ## Test results from Vader — assign experts immediately
 
-When **Vader** (or **CI**) surfaces **pytest**, **Vitest**, or **Jest E2E** failures—or **security** findings from **`docs/security-review.md`**—**Yoda** does **not** queue fixes for later triage. **Ingest, classify, assign, and start** in the same turn.
+When **Vader** (or **CI**) surfaces **pytest**, **Vitest**, or **Playwright E2E** failures—or **security** findings from **`docs/security-review.md`**—**Yoda** does **not** queue fixes for later triage. **Ingest, classify, assign, and start** in the same turn.
 
 1. **Source of truth**: Read [`team/handoff-yoda-from-vader.md`](handoff-yoda-from-vader.md), the failing **GitHub Actions** job log, and **`docs/test-strategy.md`** for intended coverage.
 2. **Map failure → owner** (specialist **starts** on the item; parallel tracks when independent):
    - **Backend** (FastAPI, LiteLLM mocks, export, key store, SSE) — **Luke** (`team/luke.md`).
    - **Frontend** (React, MUI, Monaco, WASM worker integration, chat UI) — **Leia** (`team/leia.md`).
-   - **CI/CD, Docker, GHCR, workflow YAML, ports, Jest+Puppeteer wiring** — **R2-D2** (`team/r2d2.md`).
+   - **CI/CD, Docker, GHCR, workflow YAML, ports, Playwright wiring** — **R2-D2** (`team/r2d2.md`).
    - **Ambiguous contract** (who owns the bug?) — brief **Han** (`team/han.md`), then route to Luke or Leia per decision.
 3. **Brief each assignee**: failing **workflow / test file**, reproduction steps, expected vs actual, logs, **non-goals**.
 4. **Close the loop**: After fix, re-run the failed **job** or **`npm run test:e2e`** / **`pytest`** slice; update **`team/handoff-yoda-from-vader.md`** with **resolved** or **still open** status.
@@ -74,7 +74,7 @@ When **Vader** (or **CI**) surfaces **pytest**, **Vitest**, or **Jest E2E** fail
 | Concern | Owner | Repo artifacts |
 |---------|--------|------------------|
 | **Workflow** | **R2-D2** | `.github/workflows/test.yml` — backend **`uvicorn`** on **:8000**, then **`NODE_ENV=development`** and **`production`** **`npm run test:e2e`** |
-| **Browser tests** | **Vader** + **Leia** / **Luke** | `tests/e2e.test.js` — **no** `console.error` (manifest, proxy 500s, real bugs); app behaviour vs OpenSCAD WASM |
+| **Browser tests** | **Vader** + **Leia** / **Luke** | `tests/e2e.spec.ts` — **no** unexpected `console` **errors** (manifest, proxy 500s, real bugs); app behaviour vs OpenSCAD WASM |
 
 Local E2E: start backend on the port Vite proxies to (**`BACKEND_PORT`**, default **8000**), then `npm run test:e2e` from repo root (see **`team/r2d2.md`**).
 

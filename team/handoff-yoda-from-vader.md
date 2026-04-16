@@ -10,7 +10,7 @@
 |------|--------|
 | **Backend** | `cd backend` → `ruff check .`, `python -m pytest tests/ -v` mit `TESTING=1` (siehe **`.github/workflows/ci.yml`**) |
 | **Frontend** | `npm ci`, `npm run build:libs:wasm`, `npm run build` (**`ci.yml`**) |
-| **E2E + Matrix** | **`.github/workflows/test.yml`**: Node **lts/-2** & **latest**, `npm run build:all`, Artifact **`dist`**; **uvicorn** `127.0.0.1:8000`; **`NODE_ENV=development`** und **`production`** → **`npm run test:e2e`** (**Jest** + **jest-puppeteer**, `tests/e2e.test.js`) |
+| **E2E + Matrix** | **`.github/workflows/test.yml`**: Node **lts/-2** & **latest**, `npm run build:all`, Artifact **`dist`**; **`npx playwright install --with-deps chromium`**; **uvicorn** `127.0.0.1:8000`; **`NODE_ENV=development`** und **`production`** → **`npm run test:e2e`** (**Playwright**, `tests/e2e.spec.ts`) |
 | **Sicherheit / Review** | **`docs/security-review.md`**, ADRs unter **`docs/adrs/`** — bei Änderungen an Keys, CORS, Export, Chat-Stream mit **Vader** + **C-3PO** abgleichen |
 
 ### R2-D2 (Delivery)
@@ -38,7 +38,7 @@ PR/Issue:
 
 **Häufige Ursachen (E2E):**
 
-- Backend nicht erreichbar → Vite-Proxy **`/api/v1/models`** → **500**, `console.error` in **`tests/e2e.test.js`**.
+- Backend nicht erreichbar → Vite-Proxy **`/api/v1/models`** → **500**, sichtbar in **`tests/e2e.spec.ts`** (Playwright `console` **error**-Assertions).
 - Ungültiges **Web-App-Manifest** in Dev (Historie): **`team/r2d2.md`** Abschnitt *vite-plugin-pwa*.
 
 ---

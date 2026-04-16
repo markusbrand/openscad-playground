@@ -76,13 +76,26 @@ Use Testing Library queries aligned with Material Design labels where possible.
 
 ## E2E testing (Playwright)
 
-### Critical flows
+### Layout
+
+- **`playwright.config.ts`** — starts **Vite** via `npm run start:development` / `start:test` (port **4000**) or `npm run start:production` (**3000**) as `webServer`; **Chromium** only; mirrors former jest-puppeteer behaviour.
+- **`tests/e2e.spec.ts`** — default page, cube render, BOSL2/NopSCADlib, demos by path/URL, customizer + CRLF; asserts **no unexpected `console` errors** (same bar as before).
+
+### Running E2E locally
+
+1. **One-time:** `npx playwright install chromium` (or `npx playwright install --with-deps chromium` on Linux CI-like hosts).
+2. Start **FastAPI** on the port Vite proxies to (default **`BACKEND_PORT=8000`**, see root / `backend` `.env`). If `BACKEND_PORT` in `.env` is not **8000**, either run uvicorn on that port or set `BACKEND_PORT` when starting Vite so `/api/v1/models` does not return **500**.
+3. From repo root: `npm run test:e2e` (defaults to `NODE_ENV` unset → **`start:test`** on **4000**), or `NODE_ENV=development npm run test:e2e`, or `NODE_ENV=production npm run test:e2e` (requires **`dist/`** from `npm run build`).
+
+CI: **`.github/workflows/test.yml`** runs `npx playwright install --with-deps chromium`, starts **uvicorn** on **127.0.0.1:8000**, then **`NODE_ENV=development`** and **`production`** `npm run test:e2e`.
+
+### Critical flows (coverage roadmap)
 
 1. **Dual-view / shell layout** — Toggle or resize dual view; editor and viewer remain usable.
 2. **Settings** — Open settings dialog, optional API key field, close without breaking session.
 3. **Export** — Open export dialog, choose options, confirm download or clipboard path if applicable.
 
-E2E runs against `vite preview` or a docker-compose stack; seed env so LLM calls are mocked or use a fixed local model only if the pipeline explicitly provides it.
+E2E runs against the **Vite** dev server or **`vite preview`**; keep LLM calls out of the critical path where possible (models list should work with a healthy backend; no live chat completion required for current scenarios).
 
 ---
 
@@ -98,13 +111,12 @@ Full OpenSCAD syntax validation in CI is optional (would require a headless `ope
 
 ---
 
-## Continuous integration (recommended)
+## Continuous integration
 
-- **Job 1:** `backend` — `pip install -r requirements.txt -r requirements-dev.txt && pytest`.
-- **Job 2:** Frontend — `npm ci && npm run test` (once Vitest scripts exist).
-- **Job 3 (nightly or main-only):** Playwright against built assets.
+- **`ci.yml` (main):** backend **pytest** + **ruff**; frontend **`npm run build:libs:wasm`** + **`vite build`**; Docker → GHCR on push to `main`.
+- **`test.yml`:** Node matrix, **`npm run build:all`**, Playwright **`npm run test:e2e`** twice (**development** + **production**) with backend on **:8000**.
 
-Publish JUnit XML from pytest/playwright for GitHub Actions annotations.
+Publish JUnit XML from pytest (and optionally Playwright `--reporter=junit`) for GitHub Actions annotations if desired.
 
 ---
 

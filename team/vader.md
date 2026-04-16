@@ -47,14 +47,25 @@ Parse **logs**, **screenshots**, **traces/telemetry**, and failure output to **c
 
 ## OpenSCAD Playground (this repository)
 
-- **Normative test strategy**: **`docs/test-strategy.md`** — pyramid (pytest backend, Vitest frontend when added). **CI wiring**: **`team/r2d2.md`** (`.github/workflows/ci.yml`, `.github/workflows/test.yml`). The doc may mention **Playwright** as a future option; **today’s** browser E2E in **`.github/workflows/test.yml`** is **Jest** + **jest-puppeteer** (`tests/e2e.test.js`).
+- **Normative test strategy**: **`docs/test-strategy.md`** — pyramid (pytest backend, Vitest frontend when added). **CI wiring**: **`team/r2d2.md`** (`.github/workflows/ci.yml`, `.github/workflows/test.yml`).
 - **Backend**: **FastAPI** under **`backend/`** — **`python -m pytest`** from `backend/`; mock **LiteLLM** in tests; no Django/CSRF session model—API is primarily **Bearer-style keys** / config endpoints; **CORS** is `CORSMiddleware` from settings.
-- **Browser E2E (CI)**: **`tests/e2e.test.js`** with **Jest** + **jest-puppeteer** — `npm run test:e2e` in **`.github/workflows/test.yml`** after **Vite** dev server and **`uvicorn`** on **`127.0.0.1:8000`** (see workflow). Tests collect **`console` errors**; failures often mean **invalid manifest URL**, **Vite proxy → backend down**, or real UI regressions—see **`team/r2d2.md`** *Configuration notes*.
+- **Browser E2E (CI)**: **`tests/e2e.spec.ts`** with **Playwright** — `npm run test:e2e` in **`.github/workflows/test.yml`** after **`npx playwright install --with-deps chromium`**, **Vite** (`webServer` in `playwright.config.ts`), and **`uvicorn`** on **`127.0.0.1:8000`**. Tests assert **no unexpected `console` errors**; failures often mean **manifest/proxy/backend port** mismatch or real UI regressions—see **`team/r2d2.md`** *Configuration notes*.
 - **Security reviews (this product)**: **`docs/security-review.md`** and ADRs under **`docs/adrs/`** — update when auth, CORS, key storage, or export paths change.
+
+### E2E smoke (Vader — do this briefly when validating a change)
+
+Before signing off on a release candidate or after touching **Vite**, **WASM**, **PWA/manifest**, **Chat/API proxy**, or **Playwright** wiring, **run the same bar CI uses**:
+
+1. **Once per machine** (if browsers missing): `npx playwright install chromium` (Linux CI-like: `npx playwright install --with-deps chromium`).
+2. **Backend** on **`127.0.0.1:8000`** with **`GET /api/v1/health`** OK — match **`BACKEND_PORT`** in root / `backend` **`.env`** to what **Vite** proxies (default **8000**); otherwise **`/api/v1/models`** → **500** and E2E fails for the wrong reason.
+3. From repo root: **`BACKEND_PORT=8000`** (if needed) **`npm run test:e2e`** with **`NODE_ENV=development`** and again with **`NODE_ENV=production`** (production needs **`dist/`** from **`npm run build`**; **`npm run build:all`** if WASM/libs missing).
+4. **Expect**: all **7** tests **green**, **no** unexpected **`console` errors**; optional: `npx playwright show-report` if you need traces from a failed retry.
+
+If anything fails, capture the **Playwright** output / **`test-results/`** path and log it in **`team/handoff-yoda-from-vader.md`** for routing.
 
 ## Reference — Tagly (other project)
 
-Recorded **deployment hardening** review and **LC-1 … LC-9** Playwright lifecycle checklist for **Tagly** are archived in **`team/vader-tagly-reference.md`**. Do not confuse that checklist with this repo’s Jest E2E.
+Recorded **deployment hardening** review and **LC-1 … LC-9** lifecycle checklist for **Tagly** are archived in **`team/vader-tagly-reference.md`**. Do not confuse that checklist with this repo’s **OpenSCAD Playground** E2E (`tests/e2e.spec.ts`).
 
 ## File location
 
