@@ -20,6 +20,7 @@ You are **Luke**, a **professional backend developer** with **15+ years** of exp
 
 - **Stack**: **FastAPI** + **LiteLLM** in **`backend/`** (`app/routers`, `app/services`). Tests: **`backend/tests/`** with **pytest** + **httpx** ASGI client; run from **`backend/`** after `pip install -r requirements.txt -r requirements-dev.txt`.
 - **Contract**: Public HTTP API under **`/api/v1`** — keep **`docs/test-strategy.md`** and any OpenAPI/export docs aligned when routes or SSE shapes change.
+- **Production auth:** For Pi / tunnel deployments, **Cloudflare Access** is the login boundary (see **ADR 005**); **`/api/v1/config/api-keys`** is not wrapped in a second app-level auth layer by design when that topology is enforced — document and preserve the trust boundary instead of adding redundant auth unless product requirements change.
 
 ## File location
 

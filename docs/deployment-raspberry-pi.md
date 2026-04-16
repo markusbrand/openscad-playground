@@ -124,6 +124,16 @@ You should get a JSON response indicating the API is up.
 
 Traffic flow: **Internet → Cloudflare (TLS) → cloudflared tunnel → http://localhost:3080** on the Pi (single public hostname for UI and API proxy).
 
+### Cloudflare Access (who may open the app)
+
+The FastAPI backend does **not** implement a separate login for **`/api/v1/config/api-keys`**. Treat **identity and policy** as a **Cloudflare** concern:
+
+1. In **Zero Trust → Access → Applications**, add an **Self-hosted** application for your hostname (e.g. **`openscad.brandstaetter.rocks`**).
+2. Attach an **Access policy** (e.g. allowlist emails, IdP group, or one-time PIN) so only intended users reach **`http://localhost:3080`** through the tunnel.
+3. Ensure there is **no second public route** to the API (do not publish the backend container port on the host; use Compose as shipped).
+
+If Access is missing or misconfigured, anyone who can hit the upstream could change stored API keys. Review policies when you add operators or change DNS.
+
 ### Option A: Using the `cloudflared` CLI (recommended on the Pi)
 
 1. **Login** (opens a browser once):

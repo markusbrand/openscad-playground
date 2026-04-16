@@ -96,6 +96,10 @@ Models are proxied through LiteLLM; the UI loads the catalog from `GET /api/v1/m
 
 - [docs/README.md](docs/README.md) — index (API table, ADRs, deployment, testing, security)
 
+### Security and production access
+
+For **internet-facing** installs, **login and authorization** are expected at **Cloudflare** via **Cloudflare Access** (Zero Trust) on the public hostname, not as a second sign-in inside FastAPI. The Settings / **`/api/v1/config/api-keys`** flow assumes that perimeter (see [docs/security-review.md](docs/security-review.md) — section *Chosen control: Cloudflare Access*), [ADR 005 — deployment topology](docs/adrs/005-deployment-topology.md), and the **Cloudflare Access** steps under [docs/deployment-raspberry-pi.md](docs/deployment-raspberry-pi.md) (§ 3, *Set up Cloudflare Tunnel*).
+
 ## Contributing
 
 1. Fork the repository and create a branch for your change.
