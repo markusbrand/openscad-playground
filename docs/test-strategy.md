@@ -25,7 +25,7 @@ Higher layers are slower and more brittle; prefer pushing assertions down the py
 
 ### Layout
 
-- `backend/tests/conftest.py` — shared `client` fixture: `ASGITransport(app=app, lifespan="on")` so startup loads the master prompt and constructs `KeyStore`, `LLMService`, and `ExportService` like production.
+- `backend/tests/conftest.py` — shared `client` fixture: `asgi_lifespan.LifespanManager` plus `httpx.ASGITransport` so ASGI lifespan runs (httpx does not); startup loads the master prompt and constructs `KeyStore`, `LLMService`, and `ExportService` like production.
 - Isolated `api_keys_file` under `tmp_path` per test so the encrypted key file never touches the developer’s real `data/api_keys.json`.
 - Install: `pip install -r requirements.txt -r requirements-dev.txt` from `backend/`.
 

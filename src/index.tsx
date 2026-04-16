@@ -28,31 +28,9 @@ declare var BrowserFS: BrowserFSInterface
 
 
 window.addEventListener('load', async () => {
-  //*
-  if (process.env.NODE_ENV === 'production') {
-    if ('serviceWorker' in navigator) {
-        try {
-            const registration = await navigator.serviceWorker.register('./sw.js');
-            console.log('ServiceWorker registration successful with scope: ', registration.scope);
+  // Vite production builds do not emit ./sw.js (legacy Workbox lived in webpack.libs only).
+  // Registering a missing script yields HTML from the SPA fallback and breaks the console (E2E).
 
-            registration.onupdatefound = () => {
-                const installingWorker = registration.installing;
-                if (installingWorker) {
-                  installingWorker.onstatechange = () => {
-                      if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                          window.location.reload();
-                          return;
-                      }
-                  };
-                }
-            };
-        } catch (err) {
-            console.log('ServiceWorker registration failed: ', err);
-        }
-    }
-  }
-  //*/
-  
   registerCustomAppHeightCSSProperty();
 
   const fs = await createEditorFS({prefix: '/libraries/', allowPersistence: isInStandaloneMode()});
