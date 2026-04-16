@@ -82,7 +82,7 @@ def _enforce_settings_api_keys_over_key_store() -> None:
 
 app = FastAPI(
     title="OpenSCAD AI Backend",
-    version="0.1.0",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
