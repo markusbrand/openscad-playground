@@ -40,7 +40,7 @@ cp .env.example .env        # Windows: copy .env.example .env — add API keys a
 python dev.py               # port from BACKEND_PORT (default 8000); or: npm run dev:backend from repo root
 ```
 
-Ports are configurable via **root** `.env` and/or **`backend/.env`** (see [Configuration](#configuration)): `FRONTEND_DEV_PORT`, `BACKEND_PORT`, and for Docker `FRONTEND_PORT`. Set `CORS_ALLOWED_ORIGINS` in `backend/.env` to include your Vite origin (for example `http://localhost:<FRONTEND_DEV_PORT>`).
+Ports are configurable via **root** `.env` and/or **`backend/.env`** (see [Configuration](#configuration)): `FRONTEND_DEV_PORT`, `BACKEND_PORT`, and for Docker `FRONTEND_PORT`. **CORS** and **API keys**: sinnvoller in **`backend/.env`** für lokales Vite, im **Root-`.env`** wenn du nur Docker nutzt — siehe Kommentare in [`.env.example`](.env.example) und [`backend/.env.example`](backend/.env.example).
 
 ## Docker deployment
 
@@ -73,8 +73,8 @@ Design decisions are recorded as **ADRs**: [docs/adrs/](docs/adrs/). Documentati
 
 ## Configuration
 
-- **Root** [`.env.example`](.env.example) — `docker compose` (**`FRONTEND_PORT`**, **`BACKEND_PORT`**, shared dev defaults such as **`FRONTEND_DEV_PORT`**).
-- **Backend** [`backend/.env.example`](backend/.env.example) — local `python dev.py` / Docker: settings load **repo root `.env` first**, then **`backend/.env`** (backend wins on duplicate keys).
+- **Root** [`.env.example`](.env.example) — Ports und alles, was **`docker compose`** in den Backend-Container braucht (Compose liest nur diese Datei).
+- **Backend** [`backend/.env.example`](backend/.env.example) — typisch **lokale** Overrides (CORS für Vite, Ollama `localhost`, API-Keys). FastAPI/Vite: **Root zuerst**, dann **`backend/.env`** (bei doppeltem Namen gewinnt `backend/.env`).
 
 | Variable | Purpose |
 |----------|---------|

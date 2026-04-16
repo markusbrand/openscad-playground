@@ -31,29 +31,35 @@ Replace `<your-org>` with your GitHub user or organisation name.
 
 ### Environment file
 
-The Compose file loads **`./.env`** from the **repository root** for the backend service. There is a template at **`backend/.env.example`**.
+The Compose file loads **`./.env`** from the **repository root** for the backend service only (not `backend/.env`). Use the root template:
 
 ```bash
-cp backend/.env.example .env
+cp .env.example .env
 nano .env   # or vim, code --remote, etc.
 ```
 
+See comments in **`.env.example`** vs **`backend/.env.example`** for which variables belong in the root file (Docker) vs optional local overrides.
+
 ### Key `.env` settings
 
-| Variable | Purpose |
-|----------|---------|
-| **`FRONTEND_PORT`** | Host port mapped to the frontend container (default **`3080`**). Point Cloudflare Tunnel at **`http://localhost:<FRONTEND_PORT>`**. Not stored in `backend/.env.example`; set it in the shell or add to `.env` if you use a Compose override that reads it. Compose default is **`3080`** (`${FRONTEND_PORT:-3080}:80`). |
-| **`CORS_ALLOWED_ORIGINS`** | Comma-separated browser origins allowed to call the API. Must include your public UI origin, e.g. **`https://openscad.brandstaetter.rocks`**. For local Vite dev you can keep **`http://localhost:5173`** as well. |
-| **API keys** | Uncomment and set keys for providers you use (**`GEMINI_API_KEY`**, **`OPENAI_API_KEY`**, **`ANTHROPIC_API_KEY`**, **`MISTRAL_API_KEY`**). Keys can also be stored via the app UI into the backend data volume. |
-| **`OLLAMA_BASE_URL`** | Base URL for Ollama when the backend talks to a local model server. See [Optional: Ollama](#5-optional-ollama-for-local-llms). |
-| **`MASTER_PROMPT_PATH`** | Path inside the backend container to the master prompt file (default matches the image layout). |
-| **`LOG_LEVEL`** | e.g. **`INFO`** or **`DEBUG`** for more verbose logs. |
+| Variable | Purpose | Sinnvoller Ort |
+|----------|---------|----------------|
+| **`FRONTEND_PORT`** | Host port mapped to the frontend container (default **`3080`**). Point Cloudflare Tunnel at **`http://localhost:<FRONTEND_PORT>`**. Compose default **`3080`** (`${FRONTEND_PORT:-3080}:80`). | **Root** `.env` only — Compose / Host; nicht in `backend/.env` duplizieren. |
+| **`BACKEND_PORT`** | Port FastAPI listens on inside the backend container (healthcheck, internal). | **Root** `.env` für Docker; lokal nur in **`backend/.env`**, wenn vom Root abweichend. |
+| **`FRONTEND_DEV_PORT`** | Vite dev server (nur lokal relevant). | **Root** `.env` (Vite lädt Root + `backend/`); Override in **`backend/.env`** nur bei Bedarf. |
+| **`CORS_ALLOWED_ORIGINS`** | Kommagetrennte Browser-Origins für die API; muss die öffentliche UI-Origin enthalten (z. B. **`https://openscad.brandstaetter.rocks`**). | **Root** `.env` für dieses Pi/Compose-Setup (einzige Datei im Container). Für rein lokales Vite typischerweise **`backend/.env`** mit `http://localhost:<FRONTEND_DEV_PORT>` — siehe `.env.example` / `backend/.env.example`. |
+| **API keys** (`GEMINI_*`, …) | Provider-Keys; alternativ UI → Backend-Daten-Volume. | **Root** `.env` hier auf dem Pi (Compose). Lokal oft nur **`backend/.env`**, um Keys nicht im Repo-Root zu haben. |
+| **`OLLAMA_BASE_URL`** | Ollama-Endpunkt vom Backend aus. | **Root** `.env`: z. B. `host.docker.internal` / Docker-Netz. **`backend/.env`**: typisch `http://localhost:11434` für `python dev.py`. |
+| **`MASTER_PROMPT_PATH`** | Pfad zur Master-Prompt-Datei (relativ zu `backend/`). | **Root** für deployte Images; **`backend/.env`** nur bei lokalem Override. |
+| **`MAX_AUTODEBUG_RETRIES`** | Cap für Auto-Debug-Schleifen. | Wo auch die übrigen Backend-Defaults liegen (meist **Root** auf dem Pi). |
+| **`LOG_LEVEL`** | z. B. **`INFO`** oder **`DEBUG`**. | Wie oben — **Root** auf dem Pi; lokal optional **`backend/.env`**. |
 
-Example fragment for production behind Cloudflare:
+Example fragment for production behind Cloudflare (root `.env` — see table column *Sinnvoller Ort*):
 
 ```env
-CORS_ALLOWED_ORIGINS=https://openscad.brandstaetter.rocks,http://localhost:5173
 FRONTEND_PORT=3080
+BACKEND_PORT=8000
+CORS_ALLOWED_ORIGINS=https://openscad.brandstaetter.rocks,http://localhost:5173
 LOG_LEVEL=INFO
 ```
 
