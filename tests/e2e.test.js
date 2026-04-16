@@ -1,7 +1,7 @@
 const longTimeout = 60000;
 
 const isProd = process.env.NODE_ENV === 'production';
-const baseUrl = isProd ? 'http://localhost:3000/dist/' : 'http://localhost:4000/';
+const baseUrl = isProd ? 'http://localhost:3000/' : 'http://localhost:4000/';
 
 const messages = [];
 
@@ -61,36 +61,32 @@ function expect3DPolySet() {
 function expect3DManifold() {
   expectMessage(messages, 'stderr:    Top level object is a 3D object (manifold):');
 }
-function waitForCustomizeButton() {
-  return page.waitForFunction(() => {
-    // Try multiple selectors for PrimeReact components
-    // ToggleButton might render as button or input elements
-    const selectors = [
-      'input[role=switch]',
-      'button',
-      '[role=tab]',
-      '.p-togglebutton',
-      '.p-tabmenu-nav a'
-    ];
-
-    for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      for (const element of elements) {
-        const text = element.textContent || element.innerText || '';
-        const parentText = element.parentElement?.textContent || element.parentElement?.innerText || '';
-        if (text.includes('Customize') || parentText.includes('Customize')) {
-          return element;
-        }
-      }
-    }
-    return null;
-  }, { timeout: 45000 }); // Increase timeout to 45 seconds
-}
-function waitForLabel(text) {
-  return page.waitForFunction(() => {
-    return Array.from(document.querySelectorAll('label')).find(el => el.textContent === 'myVar');
-    // return Array.from(document.querySelectorAll('label')).find(el => el.textContent === text);
+/** MUI Tabs: Customize appears as a tab only after parameters are detected. */
+async function clickCustomizeTab() {
+  await page.waitForFunction(
+    () =>
+      [...document.querySelectorAll('[role="tab"]')].some((el) =>
+        (el.textContent || '').includes('Customize')
+      ),
+    { timeout: 45000 }
+  );
+  await page.evaluate(() => {
+    const tab = [...document.querySelectorAll('[role="tab"]')].find((el) =>
+      (el.textContent || '').includes('Customize')
+    );
+    tab?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
   });
+}
+/** MUI CustomizerPanel shows parameter names in Typography, not <label>. */
+function waitForCustomizerParameterName(name) {
+  return page.waitForFunction(
+    (paramName) =>
+      [...document.querySelectorAll('.MuiAccordion-root')].some((acc) =>
+        (acc.textContent || '').includes(paramName)
+      ),
+    { timeout: 30000 },
+    name
+  );
 }
 
 describe('e2e', () => {
@@ -137,6 +133,9 @@ describe('e2e', () => {
   }, longTimeout);
 
   test('customizer & windows line endings work', async () => {
+    // Below 768px the app uses single-column layout (MUI Tabs), which exposes the Customize tab.
+    // Wider viewports use multi layout (Chat/Code only) and never show Customize in the tab bar.
+    await page.setViewport({ width: 700, height: 900 });
     await loadSrc([
       'myVar = 10;',
       'cube(myVar);',
@@ -151,9 +150,9 @@ describe('e2e', () => {
       return messages.includes('myVar') || messages.includes('Customize');
     }, { timeout: 30000 });
 
-    await (await waitForCustomizeButton()).click();
-    await page.waitForSelector('fieldset');
-    await waitForLabel('myVar');
+    await clickCustomizeTab();
+    await page.waitForSelector('.MuiAccordion-root', { timeout: 30000 });
+    await waitForCustomizerParameterName('myVar');
   }, longTimeout);
 });
 

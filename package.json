@@ -37,6 +37,9 @@
     "build:libs:wasm": "cross-env LIBS_BUILD_MODE=wasm webpack --config webpack.libs.config.js",
     "build:libs:fonts": "cross-env LIBS_BUILD_MODE=fonts webpack --config webpack.libs.config.js",
     "build:all": "npm run build:libs && npm run build",
+    "start:development": "vite --host 127.0.0.1 --port 4000 --strictPort",
+    "start:production": "vite preview --host 127.0.0.1 --port 3000 --strictPort",
+    "start:test": "vite --host 127.0.0.1 --port 4000 --strictPort",
     "test:e2e": "jest"
   },
   "eslintConfig": {
