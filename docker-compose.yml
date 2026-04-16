@@ -1,5 +1,6 @@
 services:
   backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/markusbrand/openscad-playground/backend}:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -24,6 +25,7 @@ services:
       - openscad-net
 
   frontend:
+    image: ${FRONTEND_IMAGE:-ghcr.io/markusbrand/openscad-playground/frontend}:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.frontend

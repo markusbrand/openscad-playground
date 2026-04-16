@@ -80,17 +80,41 @@ The stack consists of:
 - **Backend**: FastAPI on port **8000** inside the Docker network (not published to the host by default).
 - **Frontend**: nginx (or equivalent) serving the built SPA on port **80** inside the container, published on the host as **`FRONTEND_PORT`** (default **3080**). The production image is expected to reverse-proxy **`/api/`** to the backend so the browser uses same-origin **`/api/v1`**.
 
-### Pull pre-built images from GHCR (when available)
+### Pull pre-built images from GHCR (recommended on Raspberry Pi)
 
-If your project publishes **`frontend`** and **`backend`** images to GHCR and your `docker-compose.yml` declares `image:` entries with registry paths, authenticate and pull:
+Images are built on **`push` to `main`** (see **`.github/workflows/ci.yml`**) for **`linux/amd64`** and **`linux/arm64`**, and pushed as:
+
+- **`ghcr.io/<github-owner-lowercase>/<repo-lowercase>/backend`** — tags **`latest`**, **`<full-git-sha>`**, and on **Git tag push `v*`** (Semver, z. B. `v1.2.3`): zusätzlich **`1.2.3`**, **`v1.2.3`**, **`1.2`**, **`1`**
+- **`ghcr.io/<github-owner-lowercase>/<repo-lowercase>/frontend`** — dieselben Tag-Regeln
+
+**`docker-compose.yml`** sets default image names for this upstream repo (`markusbrand/openscad-playground`). Forks should set **`BACKEND_IMAGE`**, **`FRONTEND_IMAGE`**, and optionally **`IMAGE_TAG`** in **`.env`** (see **`.env.example`**).
+
+Private GitHub repository → packages are often **private**; authenticate before pull:
 
 ```bash
 echo <YOUR_GHCR_TOKEN> | docker login ghcr.io -u <YOUR_GITHUB_USERNAME> --password-stdin
+```
+
+Then from the repo root:
+
+```bash
 docker compose pull
 docker compose up -d
 ```
 
-If **`docker compose pull`** reports no images to pull, your Compose file is likely **build-only**; use the local build path below.
+To pin a release instead of **`latest`**, set **`IMAGE_TAG`** to e.g. **`1.2.3`** or **`v1.2.3`** (Semver-Release-Tags aus CI), or to the **full commit SHA** (long form, as pushed by **`docker/metadata-action`**). Example: **`IMAGE_TAG=v1.2.3`** in **`.env`**, then **`docker compose pull`**.
+
+### Semver releases (CI)
+
+Use a **Semver-compatible** Git tag name under **`v*`** (e.g. **`v1.2.3`**, not `release-1` — **`docker/metadata-action`** derives **`1.2.3`**, **`1.2`**, **`1`** from it). When **`main`** contains the commit to ship:
+
+```bash
+git tag -a v1.2.3 -m "Release 1.2.3" && git push origin v1.2.3
+```
+
+CI builds and pushes both **`backend`** and **`frontend`** images with the tags listed above.
+
+If you prefer to **build on the Pi** instead of pulling, skip **`docker compose pull`** and follow the local build path below (still uses the same Compose file; **`docker compose build`** tags the local build with the **`image:`** names).
 
 ### Build and run locally (recommended until GHCR images are wired)
 
