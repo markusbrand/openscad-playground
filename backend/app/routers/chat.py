@@ -7,7 +7,6 @@ import binascii
 import logging
 from pathlib import Path
 
-from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
