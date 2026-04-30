@@ -12,7 +12,7 @@ def test_rate_limiting_chat_stream(client):
         "messages": [{"role": "user", "content": "hello"}],
         "model": "gemini/gemini-1.5-flash"
     }
-    headers = {"X-Test-Rate-Limit": "true"}
+    headers = {"x-test-rate-limit": "true"}
 
     # We should be able to make 5 requests
     for i in range(5):
