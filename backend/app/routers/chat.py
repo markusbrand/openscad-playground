@@ -7,8 +7,11 @@ import binascii
 import logging
 from pathlib import Path
 
+from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+
+from app.limiter import limiter
 
 from app.schemas.chat import AutodebugRequest, AutodebugResponse, ChatRequest, FileAttachment
 
@@ -128,6 +131,7 @@ def _validate_and_normalize_files(files: list[FileAttachment] | None) -> list[Fi
 
 
 @router.post("/stream")
+@limiter.limit("5/minute")
 async def stream_chat(body: ChatRequest, request: Request) -> StreamingResponse:
     """Stream LLM response tokens via Server-Sent Events.
 
@@ -153,6 +157,7 @@ async def stream_chat(body: ChatRequest, request: Request) -> StreamingResponse:
 
 
 @router.post("/autodebug", response_model=AutodebugResponse)
+@limiter.limit("5/minute")
 async def autodebug(body: AutodebugRequest, request: Request) -> AutodebugResponse:
     """Attempt an automated fix for OpenSCAD code that has errors.
 
