@@ -23,7 +23,7 @@ const { command, port, baseURL } = e2eTarget();
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: '**/e2e.spec.ts',
+  testMatch: '**/*.spec.ts',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

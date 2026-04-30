@@ -78,54 +78,20 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
   const activeView = state.view.activeView ?? 'chat';
   const layout = state.view.layout;
   const mode = layout.mode;
+  const singleFocus = mode === 'single' ? layout.focus : undefined;
 
-  const zIndexOfPanelsDependingOnFocus = {
-    chat: {
-      chat: 3,
-      editor: 2,
-      viewer: 1,
-      customizer: 0,
-    },
-    editor: {
-      chat: 0,
-      editor: 3,
-      viewer: 1,
-      customizer: 0,
-    },
-    viewer: {
-      chat: 0,
-      editor: 2,
-      viewer: 3,
-      customizer: 1,
-    },
-    customizer: {
-      chat: 0,
-      editor: 0,
-      viewer: 1,
-      customizer: 3,
-    }
+  /**
+   * Determine z-index for panels in single mode based on the current focus.
+   * Higher number = more focused/on top.
+   */
+  const getZIndex = (id: MultiLayoutComponentId | 'chat') => {
+    if (mode === 'multi') return 0;
+    if (singleFocus === id) return 3;
+
+    // Default background layering when not focused
+    const order = { chat: 0, editor: 1, viewer: 2, customizer: 1 };
+    return order[id] ?? 0;
   };
-
-  function getPanelStyle(id: MultiLayoutComponentId | 'chat'): CSSProperties {
-    if (layout.mode === 'multi') {
-      // Multi layout uses a dedicated left column (chat/code) + right viewer in JSX;
-      // only customizer styling is handled here.
-      if (id === 'chat' || id === 'editor' || id === 'viewer') {
-        return {};
-      }
-      // customizer in multi mode - hidden (accessed via single mode)
-      return { display: 'none' };
-    } else {
-      const focus = layout.focus;
-      const focusKey = focus === 'chat' ? 'chat' : focus;
-      return {
-        flex: 1,
-        zIndex: Number((zIndexOfPanelsDependingOnFocus as any)[focusKey]?.[id] ?? 0),
-      };
-    }
-  }
-
-  const singleFocus = layout.mode === 'single' ? layout.focus : undefined;
 
   return (
     <ThemeProvider theme={theme}>
@@ -194,34 +160,25 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
                         display: 'flex',
                       }}
                     />
-                    <CustomizerPanel style={getPanelStyle('customizer')} />
+                    <CustomizerPanel style={{ display: 'none' }} />
                   </>
                 ) : (
                   <>
                     <ChatPanel
-                      className={`
-                        opacity-animated
-                        ${singleFocus !== 'chat' ? 'opacity-0' : ''}
-                        absolute-fill
-                      `}
-                      style={getPanelStyle('chat')}
+                      className={`opacity-animated ${singleFocus !== 'chat' ? 'opacity-0' : ''} absolute-fill`}
+                      style={{ zIndex: getZIndex('chat'), flex: 1 }}
                     />
                     <EditorPanel
-                      className={`
-                        opacity-animated
-                        ${singleFocus !== 'editor' ? 'opacity-0' : ''}
-                        absolute-fill
-                      `}
-                      style={getPanelStyle('editor')}
+                      className={`opacity-animated ${singleFocus !== 'editor' ? 'opacity-0' : ''} absolute-fill`}
+                      style={{ zIndex: getZIndex('editor'), flex: 1 }}
                     />
-                    <ViewerPanel className="absolute-fill" style={getPanelStyle('viewer')} />
+                    <ViewerPanel
+                      className="absolute-fill"
+                      style={{ zIndex: getZIndex('viewer'), flex: 1 }}
+                    />
                     <CustomizerPanel
-                      className={`
-                        opacity-animated
-                        ${singleFocus !== 'customizer' ? 'opacity-0' : ''}
-                        absolute-fill
-                      `}
-                      style={getPanelStyle('customizer')}
+                      className={`opacity-animated ${singleFocus !== 'customizer' ? 'opacity-0' : ''} absolute-fill`}
+                      style={{ zIndex: getZIndex('customizer'), flex: 1 }}
                     />
                   </>
                 )}

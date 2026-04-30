@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
-from pydantic import field_validator
+from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Directory that contains `app/` and `data/` (always backend/, regardless of cwd).
@@ -29,6 +30,8 @@ class Settings(BaseSettings):
     master_prompt_path: str = "prompts/master-prompt.md"
     api_keys_file: str = "data/api_keys.json"
     ollama_base_url: str = "http://localhost:11434"
+    # Comma-separated list of allowed hosts for internal service calls (SSRF protection)
+    allowed_service_hosts: str = "localhost,127.0.0.1"
     max_autodebug_retries: int = 3
     log_level: str = "INFO"
 
@@ -50,6 +53,28 @@ class Settings(BaseSettings):
         if not (1 <= v <= 65535):
             raise ValueError("BACKEND_PORT must be between 1 and 65535")
         return v
+
+    @field_validator("ollama_base_url", mode="after")
+    @classmethod
+    def _validate_ollama_url(cls, v: str, info: Any) -> str:
+        """Ensure Ollama URL is valid and restricted to trusted hosts."""
+        try:
+            from pydantic import TypeAdapter
+            adapter = TypeAdapter(AnyHttpUrl)
+            url = adapter.validate_python(v)
+
+            # Note: In field_validator, accessing other fields via info.data
+            # requires those fields to have been validated already (lexical order).
+            allowed_hosts_str = info.data.get("allowed_service_hosts", "localhost,127.0.0.1")
+            allowed_hosts = {h.strip() for h in allowed_hosts_str.split(",") if h.strip()}
+
+            if url.host not in allowed_hosts:
+                raise ValueError(f"OLLAMA_BASE_URL host {url.host} is not in the allowlist {allowed_hosts}")
+            return v
+        except Exception as e:
+            if isinstance(e, ValueError):
+                raise e
+            raise ValueError(f"Invalid OLLAMA_BASE_URL: {v}")
 
     @field_validator(
         "gemini_api_key",

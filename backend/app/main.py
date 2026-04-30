@@ -9,8 +9,11 @@ from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
+from app.limiter import limiter
 from app.routers import chat, config_api, export, health, models
 from app.services.export_service import ExportService
 from app.services.key_store import KeyStore
@@ -85,11 +88,8 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
-
-# Rate limiting: Add slowapi middleware here for production
-# from slowapi import Limiter
-# from slowapi.util import get_remote_address
-# limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

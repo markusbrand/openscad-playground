@@ -18,7 +18,7 @@ async def test_list_api_keys_empty(client) -> None:
 async def test_set_and_get_api_key_masked(client) -> None:
     response = await client.post(
         "/api/v1/config/api-keys",
-        json={"provider": "test_provider", "api_key": "test_key_12345678"},
+        json={"provider": "openai", "api_key": "test_key_12345678"},
     )
     assert response.status_code == 200
 
@@ -26,7 +26,7 @@ async def test_set_and_get_api_key_masked(client) -> None:
     assert response.status_code == 200
     data = response.json()
     keys = data["keys"]
-    test_entry = next((k for k in keys if k["provider"] == "test_provider"), None)
+    test_entry = next((k for k in keys if k["provider"] == "openai"), None)
     assert test_entry is not None
     assert "test_key_12345678" not in test_entry.get("masked_key", "")
 
@@ -35,9 +35,9 @@ async def test_set_and_get_api_key_masked(client) -> None:
 async def test_delete_api_key(client) -> None:
     await client.post(
         "/api/v1/config/api-keys",
-        json={"provider": "deleteme", "api_key": "secretsecretsecret"},
+        json={"provider": "openai", "api_key": "secretsecretsecret"},
     )
-    del_resp = await client.delete("/api/v1/config/api-keys/deleteme")
+    del_resp = await client.delete("/api/v1/config/api-keys/openai")
     assert del_resp.status_code == 200
 
     listed = (await client.get("/api/v1/config/api-keys")).json()["keys"]

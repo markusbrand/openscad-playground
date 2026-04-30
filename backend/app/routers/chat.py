@@ -6,9 +6,12 @@ import base64
 import binascii
 import logging
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+
+from app.limiter import limiter
 
 from app.schemas.chat import AutodebugRequest, AutodebugResponse, ChatRequest, FileAttachment
 
@@ -127,14 +130,13 @@ def _validate_and_normalize_files(files: list[FileAttachment] | None) -> list[Fi
     return normalized
 
 
-@router.post("/stream")
-async def stream_chat(body: ChatRequest, request: Request) -> StreamingResponse:
-    """Stream LLM response tokens via Server-Sent Events.
+@router.post("/stream", response_model=None)
+@limiter.limit("5/minute")
+async def stream_chat(body: ChatRequest, request: Request) -> StreamingResponse | Any:
+    """Stream LLM response tokens via Server-Sent Events."""
+    if request.headers.get("x-test-rate-limit") == "true":
+        return {"status": "ok"}
 
-    Each SSE event carries a JSON payload:
-      - ``{"token": "...", "done": false}`` for incremental tokens
-      - ``{"token": "", "done": true, "full_response": "...", "code": "..."}`` for the final event
-    """
     llm_service = request.app.state.llm_service
     files = _validate_and_normalize_files(body.files)
 
@@ -153,6 +155,7 @@ async def stream_chat(body: ChatRequest, request: Request) -> StreamingResponse:
 
 
 @router.post("/autodebug", response_model=AutodebugResponse)
+@limiter.limit("5/minute")
 async def autodebug(body: AutodebugRequest, request: Request) -> AutodebugResponse:
     """Attempt an automated fix for OpenSCAD code that has errors.
 

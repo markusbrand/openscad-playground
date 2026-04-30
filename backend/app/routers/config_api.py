@@ -6,6 +6,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request
 
+from app.limiter import limiter
 from app.schemas.config import ApiKeyInfo, ApiKeyListResponse, ApiKeySetRequest
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/config", tags=["config"])
 
 
 @router.post("/api-keys")
+@limiter.limit("10/minute")
 async def set_api_key(body: ApiKeySetRequest, request: Request) -> dict[str, str]:
     """Store (or update) an API key for the given provider."""
     key_store = request.app.state.key_store

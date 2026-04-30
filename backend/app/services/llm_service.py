@@ -450,6 +450,5 @@ class LLMService:
                 "Restart the API after changing .env. If you still use a valid .env key, remove any stale "
                 "Gemini key in Settings and save again, or delete backend/data/api_keys.json while the server is stopped."
             )
-        if len(raw) > 2000:
-            return raw[:2000] + "\n…(truncated)"
-        return raw
+        # Return a generic message for all other errors to avoid leaking details
+        return "Internal Provider Error: The model encountered an unexpected issue. Please try again or switch models."
