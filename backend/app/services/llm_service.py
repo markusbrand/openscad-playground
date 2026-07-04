@@ -301,12 +301,14 @@ class LLMService:
     def _looks_like_openscad_source(cls, text: str) -> bool:
         """Heuristic: fenced or raw body is plausibly OpenSCAD (works for small models)."""
         t = text.strip()
-        if len(t) < 20 or "```" in t:
+        if not t or "```" in t:
             return False
         n = cls._scad_marker_hits(t)
+        # If it has multiple markers, it's very likely OpenSCAD even if short.
         if n >= 2:
             return True
-        if n >= 1 and len(t) >= 35:
+        # If it has at least one marker and a reasonable length, or is just a simple primitive.
+        if n >= 1 and len(t) >= 5:
             return True
         return False
 
@@ -315,20 +317,17 @@ class LLMService:
         """Extract OpenSCAD from fenced blocks, generic fences, or raw SCAD-only replies."""
         if not (text and text.strip()):
             return None
+
+        # 1. Prefer labeled blocks: ```openscad ... ```
         labeled_bodies = [m.group(1).strip() for m in OPENSCAD_CODE_BLOCK_RE.finditer(text) if m.group(1).strip()]
         if labeled_bodies:
             return max(labeled_bodies, key=len)
-        bare_bodies = [m.group(1).strip() for m in BARE_TRIPLE_FENCE_RE.finditer(text) if m.group(1).strip()]
-        for body in sorted(bare_bodies, key=len, reverse=True):
-            if cls._looks_like_openscad_source(body):
-                return body
-        generic_hits: list[str] = []
-        for m in GENERIC_CODE_FENCE_RE.finditer(text):
-            body = m.group(1).strip()
-            if cls._looks_like_openscad_source(body):
-                generic_hits.append(body)
-        if generic_hits:
-            return max(generic_hits, key=len)
+
+        # 2. Look for any fenced block that actually looks like OpenSCAD
+        all_fences = re.findall(r"```[a-zA-Z0-9_-]*\s*\n?(.*?)```", text, re.DOTALL)
+        candidates = [f.strip() for f in all_fences if cls._looks_like_openscad_source(f)]
+        if candidates:
+            return max(candidates, key=len)
         stripped = text.strip()
         if "```" not in stripped:
             blocks = [b.strip() for b in re.split(r"\n{2,}", stripped) if b.strip()]

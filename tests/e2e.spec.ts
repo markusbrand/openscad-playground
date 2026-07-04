@@ -10,9 +10,14 @@ function attachConsoleCollector(page: Page): ConsoleMsg[] {
   const messages: ConsoleMsg[] = [];
   page.on('console', (msg) => {
     const loc = msg.location();
+    const type = msg.type();
+    const text = msg.text();
+    if (process.env.DEBUG_TESTS) {
+      console.log(`[CONSOLE ${type}] ${text}`);
+    }
     messages.push({
-      type: msg.type(),
-      text: msg.text(),
+      type,
+      text,
       locationUrl: loc.url ?? '',
     });
   });
@@ -20,10 +25,12 @@ function attachConsoleCollector(page: Page): ConsoleMsg[] {
 }
 
 function assertNoConsoleErrors(messages: ConsoleMsg[], testName: string) {
-  console.log(
-    `[${testName}] Messages:`,
-    JSON.stringify(messages.map(({ text }) => text), null, 2),
-  );
+  if (process.env.DEBUG_TESTS) {
+    console.log(
+      `[${testName}] Messages:`,
+      JSON.stringify(messages.map(({ text }) => text), null, 2),
+    );
+  }
   const errors = messages.filter(
     (msg) =>
       msg.type === 'error' &&
@@ -182,6 +189,34 @@ test.describe('e2e', () => {
     await clickCustomizeTab(page);
     await page.waitForSelector('.MuiAccordion-root', { timeout: 30_000 });
     await waitForCustomizerParameterName(page, 'myVar');
+    assertNoConsoleErrors(messages, testInfo.title);
+  });
+
+  test('generate a house with roof', async ({ page }, testInfo) => {
+    const messages = attachConsoleCollector(page);
+    // Simulate generation by loading src directly (matching LLM output)
+    const houseSrc = `
+// Simple House
+house_h = 20;
+house_w = 30;
+house_d = 25;
+roof_h = 15;
+
+union() {
+    // Body
+    cube([house_w, house_d, house_h], center=true);
+
+    // Roof
+    translate([0, 0, house_h/2])
+    rotate([0, 0, 0])
+    linear_extrude(height=roof_h, scale=[1, 0.001])
+    square([house_w, house_d], center=true);
+}
+    `;
+    await loadSrc(page, houseSrc);
+    await waitForViewer(page);
+    // The house is manifold, so expect manifold output
+    expect3DManifold(messages);
     assertNoConsoleErrors(messages, testInfo.title);
   });
 });
