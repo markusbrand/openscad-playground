@@ -42,12 +42,10 @@ self.addEventListener('message', async (e: MessageEvent<OpenSCADInvocation>) => 
     instance = await OpenSCAD({
       noInitialRun: true,
       'print': (text: string) => {
-        console.debug('stdout: ' + text);
         callback({stdout: text})
         mergedOutputs.push({ stdout: text })
       },
       'printErr': (text: string) => {
-        console.debug('stderr: ' + text);
         callback({stderr: text})
         mergedOutputs.push({ stderr: text })
       },
@@ -78,20 +76,6 @@ self.addEventListener('message', async (e: MessageEvent<OpenSCADInvocation>) => 
     instance.FS.chdir("/");
 
     instance.FS.mkdir('/locale');
-      
-    // const walkFolder = (path: string, indent = '') => {
-    //   console.log("Walking " + path);
-    //   instance.FS.readdir(path)?.forEach((f: string) => {
-    //     if (f.startsWith('.')) {
-    //       return;
-    //     }
-    //     const ii = indent + '  ';
-    //     const p = `${path != '/' ? path + '/' : '/'}${f}`;
-    //     console.log(`${ii}${p}`);
-    //     walkFolder(p, ii);
-    //   });
-    // };
-    // walkFolder('/libraries');
 
     if (inputs) {
       for (const source of inputs) {

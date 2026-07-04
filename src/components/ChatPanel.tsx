@@ -229,13 +229,8 @@ export default function ChatPanel({ className, style }: { className?: string; st
   useLayoutEffect(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
-    const scrollToBottom = () => {
-      el.scrollTop = el.scrollHeight;
-    };
-    scrollToBottom();
-    const raf = requestAnimationFrame(scrollToBottom);
-    return () => cancelAnimationFrame(raf);
-  }, [messages, error]);
+    el.scrollTop = el.scrollHeight;
+  }, [messages.length, error]);
 
   const applyCodeToEditor = useCallback((code: string) => {
     model.source = code;
