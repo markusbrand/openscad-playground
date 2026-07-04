@@ -1,6 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import { CSSProperties, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { CSSProperties, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, CircularProgress, Snackbar, Alert, Typography } from '@mui/material';
 import { ModelContext } from './contexts.ts';
 import { blurHashToImage, imageToBlurhash, imageToThumbhash, thumbHashToImage } from '../io/image_hashes.ts';
@@ -44,11 +44,11 @@ function getClosestPredefinedOrbitIndex(theta: number, phi: number): [number, nu
   const points = PREDEFINED_ORBITS.map(([_, t, p]) => spherePoint(t, p));
   const distances = points.map(p => euclideanDist(point, p));
   const radDistances = PREDEFINED_ORBITS.map(([_, ptheta, pphi]) => Math.max(radDist(theta, ptheta), radDist(phi, pphi)));
-  const [index, dist] = distances.reduce((acc, d, i) => d < acc[1] ? [i, d] : acc, [0, Infinity]) as [number, number];
+  const [index, dist] = (distances.reduce((acc, d, i) => d < (acc as [number, number])[1] ? [i, d] : acc, [0, Infinity]) as [number, number]);
   return [index, dist, radDistances[index]];
 }
 
-const originalOrbit = (([name, theta, phi]) => `${theta}rad ${phi}rad auto`)(PREDEFINED_ORBITS[0]);
+const originalOrbit = (([_name, theta, phi]) => `${theta}rad ${phi}rad auto`)(PREDEFINED_ORBITS[0]);
 
 export default function ViewerPanel({className, style}: {className?: string, style?: CSSProperties}) {
   const model = useContext(ModelContext);
@@ -63,25 +63,21 @@ export default function ViewerPanel({className, style}: {className?: string, sty
 
   const [loadedUri, setLoadedUri] = useState<string | undefined>();
 
-  const [cachedImageHash, setCachedImageHash] = useState<{hash: string, uri: string} | undefined>(undefined);
-
   const modelUri = state.output?.displayFileURL ?? state.output?.outFileURL ?? '';
   const loaded = loadedUri === modelUri;
 
-  if (state?.preview) {
-    let {hash, uri} = cachedImageHash ?? {};
-    if (state.preview.blurhash && hash !== state.preview.blurhash) {
-      hash = state.preview.blurhash;
-      uri = blurHashToImage(hash, 100, 100);
-      setCachedImageHash({hash, uri});
-    } else if (state.preview.thumbhash && hash !== state.preview.thumbhash) {
-      hash = state.preview.thumbhash;
-      uri = thumbHashToImage(hash);
-      setCachedImageHash({hash, uri});
+  const preview = useMemo(() => {
+    if (!state?.preview) return undefined;
+    if (state.preview.blurhash) {
+      return { hash: state.preview.blurhash, uri: blurHashToImage(state.preview.blurhash, 100, 100) };
     }
-  } else if (cachedImageHash) {
-    setCachedImageHash(undefined);
-  }
+    if (state.preview.thumbhash) {
+      return { hash: state.preview.thumbhash, uri: thumbHashToImage(state.preview.thumbhash) };
+    }
+    return undefined;
+  }, [state?.preview]);
+
+  const previewUri = preview?.uri;
 
   const onLoad = useCallback(async (e: any) => {
     setLoadedUri(modelUri);
@@ -196,9 +192,9 @@ export default function ViewerPanel({className, style}: {className?: string, sty
         `}
       </style>
 
-      {!loaded && cachedImageHash && 
+      {!loaded && previewUri &&
         <img
-        src={cachedImageHash.uri}
+        src={previewUri}
         style={{
           animation: 'pulse 1.5s ease-in-out infinite',
           position: 'absolute',
